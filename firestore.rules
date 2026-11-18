@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // The shop owner's Google account. The real address is set in the Firebase console, not in this public file.
+    function owner() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['OWNER_EMAIL'];
+    }
+
+    // Catalogue (designs, prices, offers, shop details): everyone reads, only the owner changes.
+    match /site/{doc} {
+      allow read: if true;
+      allow write: if owner();
+    }
+
+    // Photos uploaded from the manager: everyone sees, only the owner adds or removes.
+    match /images/{id} {
+      allow get: if true;
+      allow list, write: if owner();
+    }
+
+    // Orders: a customer can place one, but only the owner can read, change or delete them.
+    match /orders/{id} {
+      allow create: if validOrder(request.resource.data);
+      allow read, update, delete: if owner();
+    }
+
+    function validOrder(o) {
+      return o.keys().hasOnly(['createdAt','customer','phone','channel','status','items','due','discount','advance','measurements','notes'])
+        && o.keys().hasAll(['createdAt','customer','phone','channel','status','items'])
+        && o.status == 'New' && o.channel == 'Website'
+        && o.customer is string && o.customer.size() > 0 && o.customer.size() <= 80
+        && o.phone is string && o.phone.size() >= 6 && o.phone.size() <= 20
+        && o.createdAt is string && o.createdAt.size() <= 40
+        && o.items is list && o.items.size() > 0 && o.items.size() <= 30
+        && o.get('due', '') is string && o.get('due', '').size() <= 10
+        && o.get('measurements', '') == ''
+        && o.get('notes', '') is string && o.get('notes', '').size() <= 1500
+        && o.get('discount', 0) == 0 && o.get('advance', 0) == 0;
+    }
+  }
+}
