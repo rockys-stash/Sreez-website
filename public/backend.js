@@ -32,16 +32,23 @@
     await new Promise(res=>{ const off=auth.onAuthStateChanged(()=>{ off(); res(); }); });
     return {auth,db}; })().catch(e=>{ sdk=null; throw e; }));
   const b64=blob=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(blob); });
-  /* resolves to {state:'off'|'out'|'no'|'ok', email, db, store, assets, signIn, signOut} */
+  /* resolves to {state:'off'|'out'|'verify'|'no'|'ok', email, db, store, assets, signIn, signOut} */
   SB.owner=async()=>{ if(!on) return {state:'off'};
     const {auth,db}=await ready(), u=auth.currentUser;
     const o={email:u?u.email:'',db,
       signIn:()=>auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()),
       signOut:()=>auth.signOut(),
+      /* email and password: the address must be confirmed by the link Firebase emails before it counts as the owner */
+      signInEmail:(e,p)=>auth.signInWithEmailAndPassword(e,p),
+      signUp:async(e,p)=>{ const c=await auth.createUserWithEmailAndPassword(e,p); await c.user.sendEmailVerification(); },
+      sendVerify:()=>auth.currentUser.sendEmailVerification(),
+      reset:e=>auth.sendPasswordResetEmail(e),
+      refresh:async()=>{ await auth.currentUser.reload(); await auth.currentUser.getIdToken(true); },
       store:{save:data=>db.collection('site').doc('catalogue').set({json:JSON.stringify(data),updatedAt:new Date().toISOString()})},
       assets:{upload:async blob=>{ if(blob.size>740000){ const e=new Error('big'); e.code='too_large'; throw e; }
         const ref=db.collection('images').doc(); await ref.set({data:await b64(blob),type:blob.type||'image/jpeg',createdAt:new Date().toISOString()}); return {id:ref.id}; }}};
     if(!u){ o.state='out'; return o; }
+    if(!u.emailVerified){ o.state='verify'; return o; }
     /* only the owner account may read orders, so this read is the owner test */
     try{ await db.collection('orders').limit(1).get(); o.state='ok'; }catch(e){ o.state='no'; }
     return o; };

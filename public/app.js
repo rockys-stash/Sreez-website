@@ -262,7 +262,18 @@ checkout(){
     </aside>
   </div>`},
 
-manage(){ return isAdmin?adminHTML():`<div class="pagehead" style="padding-top:28px"><h1>Manage shop</h1><p class="lede">${!capsReady?'Checking your access…':own.state==='off'?'The shop is not connected to its database yet.':own.state==='no'?'You are signed in as '+esc(own.email)+'. This account is not the shop owner.':'This area is only for the shop owner. Sign in with the owner\'s Google account to manage the shop.'}</p><div class="btns">${capsReady&&own.state==='out'?'<button class="btn" id="ownIn">Sign in with Google</button>':''}${capsReady&&own.state==='no'?'<button class="btn" id="ownOut">Use another account</button>':''}<a class="btn ghost" href="#home">Back to the shop</a></div></div>`; }
+manage(){ if(isAdmin) return adminHTML();
+  const st=own.state, head=t=>`<div class="pagehead" style="padding-top:28px"><h1>Manage shop</h1><p class="lede">${t}</p>`, back='<a class="btn ghost" href="#home">Back to the shop</a>';
+  if(!capsReady) return head('Checking your access…')+'</div>';
+  if(st==='off') return head('The shop is not connected to its database yet.')+`<div class="btns">${back}</div></div>`;
+  if(st==='no') return head('You are signed in as '+esc(own.email)+'. This account is not the shop owner.')+`<div class="btns"><button class="btn" id="ownOut">Use another account</button>${back}</div></div>`;
+  if(st==='verify') return head('One more step. We sent a link to '+esc(own.email)+'. Open that email, tap the link, then come back here and press Continue. Check the spam folder if you cannot find it.')+`<div class="btns"><button class="btn" id="ownGo">Continue</button><button class="btn ghost" id="ownAgain">Send the link again</button><button class="btn ghost" id="ownOut">Use another account</button></div></div>`;
+  return head('This area is only for the shop owner. Sign in to manage the shop.')+`
+    <form class="box ownform" id="ownForm"><div class="field full"><label for="ownEmail">Email</label><input id="ownEmail" type="email" autocomplete="username" required></div>
+      <div class="field full"><label for="ownPw">Password</label><input id="ownPw" type="password" autocomplete="current-password" minlength="6" required></div>
+      <button class="btn block" type="submit">Sign in</button>
+      <div class="ownlinks"><button class="linkbtn" type="button" id="ownNew">First time? Create your password</button><button class="linkbtn" type="button" id="ownReset">Forgot password</button></div></form>
+    <div class="btns" style="margin-top:14px"><button class="btn ghost" id="ownIn">Sign in with Google</button>${back}</div></div>`; }
 };
 
 function route(){
@@ -734,11 +745,28 @@ async function ownerCheck(){ if(ownerAsked) return; ownerAsked=true;
   try{ const d=sessionStorage.getItem('sreezDraft'); if(d){ const x=JSON.parse(d); if(x&&x.products&&JSON.stringify(x)!==JSON.stringify(DATA)){ ['site','collections','products','offers'].forEach(k=>{ if(k==='site') Object.assign(SITE,x.site); else DATA[k]=x[k]; }); dirty=true; $('pubBar').hidden=false; } } }catch(e){}
   watchOrders(); chrome(); route();
 }
-document.addEventListener('click',async e=>{ const t=e.target.closest('#ownIn,#ownOut'); if(!t||!own.signIn) return;
+const authMsg=err=>{ const c=(err&&err.code)||''; return c.includes('wrong-password')||c.includes('invalid-credential')||c.includes('invalid-login')||c.includes('user-not-found')?'That email or password is not right.':c.includes('email-already-in-use')?'This email already has an account. Tap Forgot password to set a new password.':c.includes('weak-password')?'Choose a password with at least 6 characters.':c.includes('invalid-email')?'Check the email address.':c.includes('too-many-requests')?'Too many tries. Wait a few minutes and try again.':c.includes('popup')?'The Google window was closed or blocked. Try again, or use email and password.':c.includes('network')?'No connection. Check your internet and try again.':'That did not work. Try again.'; };
+const recheck=()=>{ ownerAsked=false; capsReady=false; route(); ownerCheck(); };
+async function ownAct(kind){
+  const email=$('ownEmail')?$('ownEmail').value.trim():'', pw=$('ownPw')?$('ownPw').value:'';
+  if(kind==='in'||kind==='new'){ if(!email||pw.length<6) return toast('Enter your email and a password of at least 6 characters.'); }
+  if(kind==='reset'&&!email){ $('ownEmail').focus(); return toast('Type your email first, then tap Forgot password.'); }
+  try{
+    if(kind==='in') await own.signInEmail(email,pw);
+    else if(kind==='new') await own.signUp(email,pw);
+    else if(kind==='reset'){ await own.reset(email); return toast('If that email has an account, a link to set a new password is on its way.'); }
+    else if(kind==='again'){ await own.sendVerify(); return toast('Link sent. Check your email.'); }
+    else if(kind==='go') await own.refresh();
+    else if(kind==='google') await own.signIn();
+    else if(kind==='out') await own.signOut();
+  }catch(err){ return toast(authMsg(err)); }
+  if(kind==='out'){ try{ localStorage.removeItem('sreezOwner'); }catch(e){} location.hash='home'; location.reload(); return; }
+  recheck();
+}
+document.addEventListener('submit',e=>{ if(e.target.id!=='ownForm') return; e.preventDefault(); if(own.signInEmail) ownAct('in'); });
+document.addEventListener('click',e=>{ const t=e.target.closest('#ownIn,#ownOut,#ownNew,#ownReset,#ownGo,#ownAgain'); if(!t||!own.signIn) return;
   if(t.id==='ownOut'&&dirty&&!confirm('You have changes that are not published. Sign out anyway?')) return;
-  try{ await (t.id==='ownIn'?own.signIn():own.signOut()); }catch(err){ return toast(t.id==='ownIn'?'Sign-in did not finish. Try again.':'Could not sign out. Try again.'); }
-  if(t.id==='ownOut'){ try{ localStorage.removeItem('sreezOwner'); }catch(e){} location.hash='home'; location.reload(); return; }
-  ownerAsked=false; capsReady=false; route(); ownerCheck(); });
+  ownAct({ownIn:'google',ownOut:'out',ownNew:'new',ownReset:'reset',ownGo:'go',ownAgain:'again'}[t.id]); });
 /* fetch the owner's latest published catalogue; the page was drawn from the saved copy, so redraw only if something changed */
 SB.watchImages();
 SB.loadCatalogue().then(x=>{ if(!x||!x.products||!x.site) return; const j=JSON.stringify(x); try{ localStorage.setItem('sreezCat',j); }catch(e){}

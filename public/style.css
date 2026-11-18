@@ -505,3 +505,8 @@ select.tin{max-width:44vw}
 .payid{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
 .payid code{font-size:14px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:6px 10px;overflow-wrap:anywhere}
 @media (min-width:560px){.paybox{grid-template-columns:220px 1fr;text-align:left;justify-items:start;align-items:center}.payqr{width:220px}.payinfo{justify-items:start}.payid{justify-content:flex-start}}
+
+/* owner sign-in */
+.ownform{max-width:420px;margin-top:6px}
+.ownlinks{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.linkbtn{background:none;border:0;padding:6px 0;font:inherit;font-size:13.5px;color:var(--teal);text-decoration:underline;cursor:pointer}

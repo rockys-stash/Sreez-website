@@ -5,7 +5,11 @@ const FAKE=`window.firebase=(function(){
  const col=c=>({ doc(id){ id=id||('n'+Math.random().toString(36).slice(2,8)); const k=c+'/'+id; return {id,set(d,o){ if(!st.user||st.user.email!=='owner@x.com') return Promise.reject({code:'permission-denied'}); st.docs[k]=o&&o.merge?Object.assign({},st.docs[k],d):d; fire(); return Promise.resolve(); },delete(){ delete st.docs[k]; fire(); return Promise.resolve(); }}; },
    limit(){ return {get(){ return st.user&&st.user.email==='owner@x.com'?Promise.resolve({docs:[]}):Promise.reject({code:'permission-denied'}); }}; },
    onSnapshot(ok,err){ const f=()=>ok({docs:Object.keys(st.docs).filter(k=>k.startsWith(c+'/')).map(k=>({id:k.split('/')[1],data:()=>st.docs[k]}))}); st.subs.push(f); setTimeout(f,10); } });
- const auth={get currentUser(){ return st.user; },onAuthStateChanged(f){ setTimeout(f,5); return ()=>{}; },signInWithPopup(){ st.user={email:window.__signAs||'owner@x.com'}; localStorage.setItem('fu',JSON.stringify(st.user)); return Promise.resolve(); },signOut(){ st.user=null; localStorage.removeItem('fu'); return Promise.resolve(); }};
+ const mk=u=>Object.assign(u,{sendEmailVerification(){ window.__sent=(window.__sent||0)+1; return Promise.resolve(); },reload(){ if(window.__clicked){ this.emailVerified=true; localStorage.setItem('fv','1'); localStorage.setItem('fu',JSON.stringify(this)); } return Promise.resolve(); },getIdToken(){ return Promise.resolve('t'); }}); if(st.user) mk(st.user);
+ const auth={get currentUser(){ return st.user; },onAuthStateChanged(f){ setTimeout(f,5); return ()=>{}; },signInWithEmailAndPassword(e,p){ if(p!=='secret1') return Promise.reject({code:'auth/wrong-password'}); st.user=mk({email:e,emailVerified:!!localStorage.getItem('fv')}); localStorage.setItem('fu',JSON.stringify(st.user)); return Promise.resolve(); },
+   createUserWithEmailAndPassword(e,p){ st.user=mk({email:e,emailVerified:false}); localStorage.setItem('fu',JSON.stringify(st.user)); return Promise.resolve({user:st.user}); },
+   sendPasswordResetEmail(){ window.__reset=1; return Promise.resolve(); },
+   signInWithPopup(){ st.user=mk({email:window.__signAs||'owner@x.com',emailVerified:true}); localStorage.setItem('fu',JSON.stringify(st.user)); return Promise.resolve(); },signOut(){ st.user=null; localStorage.removeItem('fu'); return Promise.resolve(); }};
  const f={initializeApp(){ return {}; },auth(){ return auth; },firestore(){ return {collection:col}; }}; f.auth.GoogleAuthProvider=function(){}; return f; })();`;
 (async()=>{
   const b=await chromium.launch(); let fail=0; const ok=(c,m)=>{ if(!c){ fail++; console.log('FAIL',m); } else console.log('ok',m); };
@@ -40,7 +44,19 @@ const FAKE=`window.firebase=(function(){
     ok(/has reached Sreez/.test(txt),w+' confirmation shown');
     // manage signed out
     await pg.goto('http://localhost:8765/index.html#manage'); await pg.waitForTimeout(600);
-    ok(await pg.locator('#ownIn').count()===1,w+' sign-in button');
+    ok(await pg.locator('#ownIn').count()===1&&await pg.locator('#ownForm').count()===1,w+' sign-in form and Google button');
+    await pg.screenshot({path:'/tmp/claude-0/-home-user/f6d5a27d-639e-5c8e-8f0d-89ddb1cbc0c9/scratchpad/login'+w+'.png'});
+    await pg.fill('#ownEmail','owner@x.com'); await pg.fill('#ownPw','badpass'); await pg.click('#ownForm [type=submit]'); await pg.waitForTimeout(300);
+    ok(/not right/.test(await pg.textContent('#toast')),w+' wrong password message');
+    await pg.fill('#ownPw','secret1'); await pg.click('#ownNew'); await pg.waitForTimeout(500);
+    ok(/We sent a link to owner@x.com/.test(await pg.textContent('#view'))&&await pg.evaluate(()=>window.__sent)===1,w+' verify step after creating password');
+    await pg.click('#ownGo'); await pg.waitForTimeout(500);
+    ok(await pg.locator('#ownGo').count()===1,w+' still waiting until link is opened');
+    await pg.evaluate(()=>window.__clicked=1); await pg.click('#ownGo'); await pg.waitForTimeout(700);
+    ok(await pg.locator('.mg').count()===1,w+' manager opens after email confirmed');
+    await pg.evaluate(()=>{ localStorage.removeItem('fu'); localStorage.removeItem('fv'); localStorage.removeItem('sreezOwner'); }); await pg.reload(); await pg.waitForTimeout(700);
+    await pg.fill('#ownEmail','owner@x.com'); await pg.click('#ownReset'); await pg.waitForTimeout(300);
+    ok(await pg.evaluate(()=>window.__reset)===1,w+' reset email requested');
     await pg.evaluate(()=>window.__signAs='stranger@x.com'); await pg.click('#ownIn'); await pg.waitForTimeout(500);
     ok(/not the shop owner/.test(await pg.textContent('#view')),w+' stranger refused');
     await pg.click('#ownOut'); await pg.waitForTimeout(800);
