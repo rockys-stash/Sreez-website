@@ -160,9 +160,12 @@ product(id){
   <div class="pagehead"><span class="eyebrow">Made to measure</span><h1>Start a custom order</h1><p class="lede">Pick a design from the shop as a starting point, or bring your own idea and fabric.</p></div>
   ${stepsHTML}
   ${SITE.usp?`<div class="note">${avImg()}<div><span class="eyebrow">A note from Sreeja Balagan</span><p>${nl(SITE.usp)}</p><span class="sig">Sreeja Balagan</span></div></div>`:''}
-  <section class="narrow"><h2>Tell Sreez what you need</h2><p class="lede">Fill in what you know. This builds a message you can send on WhatsApp or Instagram.</p>
+  <section class="narrow"><h2>Tell Sreez what you need</h2><p class="lede">Fill in what you know. Your order goes straight to Sreez, and she contacts you to confirm it.</p>
   <form id="coForm">
-    <div class="field"><label for="coName">Your name</label><input id="coName" required autocomplete="name"></div>
+    <div class="row">
+      <div class="field"><label for="coName">Your name</label><input id="coName" required autocomplete="name" maxlength="80"></div>
+      <div class="field"><label for="coPhone">Phone or WhatsApp number</label><input id="coPhone" type="tel" inputmode="tel" required autocomplete="tel" pattern="[0-9+ ()-]{8,20}" title="Your phone number, 8 to 20 digits"></div>
+    </div>
     <div class="row">
       <div class="field"><label for="coType">Garment</label><select id="coType">${DATA.collections.filter(c=>!c.hidden).map(c=>`<option${d.type===c.name?' selected':''}>${esc(c.name)}</option>`).join('')}<option>Something else</option></select></div>
       <div class="field"><label for="coDate">Needed by</label><input id="coDate" type="date"></div>
@@ -170,6 +173,12 @@ product(id){
     <div class="field"><label for="coDesign">Starting design</label><input id="coDesign" value="${esc(d.design||'')}" placeholder="A design from this site, or leave blank"></div>
     ${offers.length?`<div class="field"><label for="coOffer">Offer</label><select id="coOffer"><option value="">No offer</option>${offers.map(o=>`<option${d.offer===o.title?' selected':''}>${esc(o.title)}</option>`).join('')}</select></div>`:''}
     <div class="field"><label for="coOcc">Occasion</label><input id="coOcc" placeholder="Wedding, birthday, daily wear"></div>
+    <label class="check covisit"><input type="checkbox" id="coVisit"> I will visit the studio for measurements</label>
+    <div id="coVisitBox" class="box" hidden><div class="row">
+      <div class="field"><label for="coVDate">Visit date</label><input id="coVDate" type="date" min="${addDays(0)}"></div>
+      <div class="field"><label for="coVTime">Time</label><select id="coVTime">${['10:00 am','11:00 am','12:00 noon','1:00 pm','2:00 pm','3:00 pm','4:00 pm','5:00 pm','6:00 pm','7:00 pm'].map(t=>`<option>${t}</option>`).join('')}</select></div>
+    </div><span class="hint">${SITE.hours?'Studio hours: '+esc(SITE.hours)+'. ':''}${SITE.address?esc(SITE.address)+'. ':''}Sreez confirms the time with you, or suggests another if she is not free.</span></div>
+    <div id="coMeas">
     <div class="field"><label for="coSize">Size</label><select id="coSize">${STD.map(s=>`<option>${s}</option>`).join('')}</select></div>
     <div class="row">
       <div class="field"><label for="coBust">Bust (inches)</label><input id="coBust" inputmode="decimal"></div>
@@ -182,8 +191,9 @@ product(id){
       <div class="field"><label for="coLen">Length (inches)</label><input id="coLen" inputmode="decimal"></div>
     </div>
     <div>${measureHTML}</div>
+    </div>
     <div class="field"><label for="coNotes">Design notes</label><textarea id="coNotes" placeholder="Colour, fabric, neckline, sleeve, a design from this site"></textarea></div>
-    <button class="btn block" type="submit">Create my message</button>
+    <button class="btn block" type="submit">${SB.on?'Send my custom order':'Create my message'}</button>
   </form>
   <div id="coOut" style="margin-top:16px"></div></section>`},
 
@@ -690,23 +700,37 @@ async function placeOrder(pay){
     <div class="btns"><button class="btn" id="ckDone">I have sent it</button><a class="btn ghost" href="#checkout">Change my details</a></div></div>`;
   window.scrollTo(0,0);
 }
-document.addEventListener('submit',e=>{
+document.addEventListener('submit',async e=>{
   if(e.target.id==='ckForm'){ e.preventDefault(); placeOrder(); return; }
   if(e.target.id!=='coForm') return;
   e.preventDefault();
-  const val=id=>$(id)?$(id).value.trim():'';
-  const m=[['Bust','coBust'],['Waist','coWaist'],['Hip','coHip'],['Shoulder','coShoulder'],['Armhole','coArm'],['Upper arm','coUpper'],['Sleeve length','coSleeve'],['Length','coLen']].filter(x=>val(x[1])).map(x=>`${x[0]} ${val(x[1])} in`).join(', ');
-  const lines=[`Hi Sreez, this is ${val('coName')}. I would like a custom order.`,`Garment: ${val('coType')}`];
-  if(val('coDesign')) lines.push(`Starting design: ${val('coDesign')}`);
-  if(val('coOffer')) lines.push(`Offer: ${val('coOffer')}`);
-  if(val('coOcc')) lines.push(`Occasion: ${val('coOcc')}`);
-  if(val('coDate')) lines.push(`Needed by: ${val('coDate')}`);
-  lines.push(`Size: ${val('coSize')}`);
-  if(m) lines.push(`Measurements: ${m}`);
-  if(val('coNotes')) lines.push(`Notes: ${val('coNotes')}`);
-  $('coOut').innerHTML=`<div class="box"><div class="label">Your message</div><textarea id="coMsg" readonly>${esc(lines.join('\n'))}</textarea>${sendHTML('coMsg',lines.join('\n'))}</div>`;
+  const val=id=>$(id)?$(id).value.trim():'', visit=$('coVisit')&&$('coVisit').checked;
+  if(visit&&!val('coVDate')){ $('coVDate').focus(); return toast('Choose the date you would like to visit the studio.'); }
+  const vD=visit?new Date(val('coVDate')+'T00:00'):null, vDay=visit?['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][vD.getDay()]+', '+vD.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][vD.getMonth()]+' '+vD.getFullYear():'', vTxt=visit?`${vDay}, ${val('coVTime')}`:'';
+  const m=visit?'':[['Bust','coBust'],['Waist','coWaist'],['Hip','coHip'],['Shoulder','coShoulder'],['Armhole','coArm'],['Upper arm','coUpper'],['Sleeve length','coSleeve'],['Length','coLen']].filter(x=>val(x[1])).map(x=>`${x[0]} ${val(x[1])} in`).join(', ');
+  const lines=[`Hi Sreez, this is ${val('coName')}. I would like a custom order.`,`Garment: ${val('coType')}`], extra=[`Garment: ${val('coType')}`];
+  const add=(l,keep)=>{ lines.push(l); if(keep) extra.push(l); };
+  if(val('coDesign')) add(`Starting design: ${val('coDesign')}`);
+  if(val('coOffer')) add(`Offer: ${val('coOffer')}`,1);
+  if(val('coOcc')) add(`Occasion: ${val('coOcc')}`,1);
+  if(val('coDate')) add(`Needed by: ${val('coDate')}`);
+  if(visit) add(`Studio visit for measurements: ${vTxt}`,1); else add(`Size: ${val('coSize')}`);
+  if(m) add(`Measurements: ${m}`,1);
+  if(val('coNotes')) add(`Notes: ${val('coNotes').replace(/\s*\n\s*/g,' ')}`,1);
+  if(val('coPhone')) add(`Phone: ${val('coPhone')}`);
+  const msg=lines.join('\n'), box=(label,hint)=>`<div class="box"><div class="label">${label}</div><textarea id="coMsg" readonly>${esc(msg)}</textarea>${hint}${sendHTML('coMsg',msg)}</div>`;
+  let placed=false;
+  if(SB.on){ const go=e.target.querySelector('[type=submit]'); if(go.disabled) return; go.disabled=true; go.textContent='Sending your order…';
+    const p=DATA.products.find(p=>p.name.toLowerCase()===val('coDesign').toLowerCase()), d=val('coDesign'), g=val('coType');
+    try{ await SB.createOrder({createdAt:new Date().toISOString(),customer:val('coName').slice(0,80),phone:val('coPhone').replace(/[^\d+]/g,'').slice(0,20),channel:'Website',status:'New',
+        items:[{pid:p?p.id:'',name:(d?d+' ('+g+', custom)':g+' (custom)').slice(0,120),size:visit?'Measure at studio':val('coSize'),price:0}],due:/^\d{4}-\d{2}-\d{2}$/.test(val('coDate'))?val('coDate'):'',discount:0,advance:0,measurements:'',notes:extra.join('\n').slice(0,1500)});
+      placed=true; }catch(err){} go.disabled=false; go.textContent='Send my custom order'; }
+  if(placed){ e.target.hidden=true;
+    $('coOut').innerHTML=`<div class="box"><span class="eyebrow">Thank you</span><h2 style="margin:0">Your custom order has reached Sreez</h2><p class="hint" style="margin:0">${visit?'She will confirm your studio visit on '+esc(vTxt)+' by calling or messaging '+esc(val('coPhone'))+'.':'She will contact you on '+esc(val('coPhone'))+' to confirm the design, price and date.'}</p></div>`+box('Your order','<p class="hint" style="margin:0">Want a quicker reply? You can also send this to Sreez yourself.</p>'); }
+  else $('coOut').innerHTML=box('Your message','');
   $('coOut').scrollIntoView({block:'nearest'});
 });
+document.addEventListener('change',e=>{ if(e.target.id!=='coVisit') return; const on=e.target.checked; $('coVisitBox').hidden=!on; $('coMeas').hidden=on; if(on&&!$('coVDate').value) $('coVDate').value=addDays(1); });
 document.addEventListener('keydown',e=>{
   if(!$('lb').hidden){ if(e.key==='Escape') closeLB(); else if(e.key==='ArrowLeft') stepLB(-1); else if(e.key==='ArrowRight') stepLB(1); return; }
   if(e.key==='Escape'){ closeSheets(); if(!$('searchBar').hidden) toggleSearch(false); } });

@@ -510,3 +510,7 @@ select.tin{max-width:44vw}
 .ownform{max-width:420px;margin-top:6px}
 .ownlinks{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .linkbtn{background:none;border:0;padding:6px 0;font:inherit;font-size:13.5px;color:var(--teal);text-decoration:underline;cursor:pointer}
+
+/* custom order: studio visit */
+.covisit{font-weight:600;padding:4px 0}
+#coVisitBox .hint{font-size:13px;color:var(--muted)}
