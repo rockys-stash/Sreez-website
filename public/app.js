@@ -225,7 +225,7 @@ help(){ const d=(title,val,hint)=>val?`<details><summary>${title}</summary><p>${
   <div class="crumbs"><a href="#home">Home</a><span>/</span><span>Help</span></div>
   <div class="pagehead"><h1>Help</h1><p class="lede">Sizing, delivery and what happens after you order.</p></div>
   <div class="narrow">
-    <details open><summary>How do I order?</summary><p>Open a design, choose a size and tap Add to cart. Open your cart, tap Checkout, fill in your name, phone and delivery choice, and place the order. The last step sends your order to Sreez on WhatsApp or Instagram. She replies to confirm the price and date before stitching starts.${Number(SITE.leadDays)?' Stitching usually takes about '+dayTxt(Math.round(Number(SITE.leadDays)))+'.':''}</p></details>
+    <details open><summary>How do I order?</summary><p>Open a design, choose a size and tap Add to cart. Open your cart, tap Checkout, fill in your name, phone and delivery choice, and place the order. Your order goes straight to Sreez. She contacts you to confirm the price and date before stitching starts.${Number(SITE.leadDays)?' Stitching usually takes about '+dayTxt(Math.round(Number(SITE.leadDays)))+'.':''}</p></details>
     <details><summary>Size guide</summary><p>Standard sizes run from XS to XXL, or you can send your own measurements.${SITE.sizeChart?'<br><br>'+nl(SITE.sizeChart):' '+todo('Size chart to add')}</p></details>
     ${measureHTML}
     <details><summary>Can I change the colour or fabric?</summary><p>Yes. Every piece is stitched to order, so you can ask for a different colour, fabric, neckline or sleeve.</p></details>
@@ -467,7 +467,7 @@ shop(){ bo=SITE; return {title:'Shop details',body:`
   ${pn('Contact',`<div class="fgrid">${fld('WhatsApp number','wa',{ph:'919876543210',hint:'Digits only, with country code. Turns on the Send on WhatsApp buttons.'})}${fld('WhatsApp number as shown','waShow',{ph:'+91 98765 43210'})}${fld('Instagram username','ig')}${fld('Opening hours','hours',{ph:'Mon to Sat, 10 am to 7 pm'})}${fld('Studio address','address',{area:1})}</div>`,'Shown on the Contact page and in the footer.')}
   ${pn('Top banner',`<div class="fgrid">${fld('Message at the top of every page','announce',{full:1})}</div>`)}
   ${pn('About page',`<div class="fgrid">${fld('Her story','story',{area:1,hint:'Leave an empty line between paragraphs.'})}${fld('Quote shown under the story','quote',{area:1})}${fld('Specialities','specialities',{area:1,t:'lines',hint:'One speciality per line.'})}${fld('My USP','usp',{area:1})}${fld('My vision','vision',{area:1})}<div class="field"><label>Portrait photo</label>${onePhoto('portrait')}<span class="hint">The large photo on the About and home pages.</span></div><div class="field"><label>Small round photo</label>${onePhoto('avatar')}<span class="hint">Her face, shown beside each design and on the custom order note. Uses the portrait if empty.</span></div></div>`,'Leave a box empty to hide that part of the About page.')}
-  ${pn('Ordering',`<div class="fgrid">${fld('Usual stitching time (days)','leadDays',{t:'num',ph:'For example 10',hint:'Shown on every design, in the cart and at checkout. A design can have its own time in Designs.'})}${fld('Payment','payment',{area:1,ph:'Payment methods and advance'})}</div>`,'What customers are told when they buy.')}
+  ${pn('Ordering',`<div class="fgrid">${fld('Usual stitching time (days)','leadDays',{t:'num',ph:'For example 10',hint:'Shown on every design, in the cart and at checkout. A design can have its own time in Designs.'})}${fld('UPI ID for payments','upi',{ph:'For example name@okhdfcbank',hint:'Turns on the payment step at checkout, with a QR code and a pay button.'})}${fld('Name shown to the payer','upiName',{ph:'Sreez The Dress Maker'})}${fld('Advance to collect (%)','advancePct',{t:'num',ph:'50',hint:'Share of the order total asked at checkout. Use 100 for full payment. Empty means 50.'})}${fld('Payment','payment',{area:1,ph:'Payment methods and advance'})}</div>`,'What customers are told when they buy. Payment is asked only when every design in the cart has a price.')}
   ${pn('Help page',`<div class="fgrid">${fld('Size chart','sizeChart',{area:1,ph:'S: bust 34, waist 28, hip 36 ...'})}${fld('Delivery','delivery',{area:1,ph:'Stitching time, shipping areas and charges'})}${fld('Alterations and returns','alterations',{area:1})}</div>`)}
   ${pn('Offers page',`<div class="fgrid">${fld('Offer terms','offerTerms',{area:1})}<div class="field full"><label>Banner photo</label>${onePhoto('offerBanner')}</div></div>`)}`}; },
 insights(){ return {title:'Insights',body:insightsHTML()}; }
@@ -623,20 +623,48 @@ document.addEventListener('click',e=>{
   else if(t.id==='ckDone'){ bag=[]; saveBag(); renderBag(); location.hash='home'; }
   else closeSheets();
 });
-async function placeOrder(){
-  const val=id=>$(id)?$(id).value.trim():'', L=bagLead(), del=val('ckDel');
+/* advance asked at checkout: a share of the total, only when the shop has a UPI ID and every item has a price */
+const advPct=()=>{ const n=Number(SITE.advancePct); return n>0?Math.min(100,Math.round(n)):50; };
+const advDue=()=>{ const x=bagTotal(); return SITE.upi&&x.t&&!x.open?Math.ceil(x.t*advPct()/100):0; };
+const upiLink=amt=>'upi://pay?pa='+encodeURIComponent(SITE.upi.trim())+'&pn='+encodeURIComponent(SITE.upiName||'Sreez The Dress Maker')+'&am='+amt+'.00&cu=INR&tn='+encodeURIComponent('Sreez order advance');
+let ckv=null, qrLib=null;
+const loadQr=()=>qrLib||(qrLib=new Promise((res,rej)=>{ const e=document.createElement('script'); e.src='qr.js'; e.onload=res; e.onerror=()=>{ qrLib=null; rej(); }; document.head.appendChild(e); }));
+function payStep(){
+  const amt=advDue(), tot=bagTotal().t, full=advPct()>=100;
+  $('view').innerHTML=`<div class="sent"><div><span class="eyebrow">Payment</span><h1 style="margin-top:4px">${full?'Pay for your order':'Pay the advance'}</h1><p class="lede">${full?`Pay ${inr(amt)} by UPI to confirm your order.`:`Pay ${inr(amt)} now by UPI, which is ${advPct()}% of ${inr(tot)}, to confirm your order. The balance is paid at delivery.`}</p></div>
+    <div class="box paybox"><div class="payqr" id="payQr" role="img" aria-label="UPI payment code"></div>
+      <div class="payinfo"><div class="payamt">${inr(amt)}</div><div class="payto">to ${esc(SITE.upiName||'Sreez The Dress Maker')}</div><div class="payid"><code id="payId">${esc(SITE.upi.trim())}</code><button class="mini" id="payCopy" type="button">Copy</button></div>
+        <a class="btn block" href="${esc(upiLink(amt))}">Pay with a UPI app</a><p class="hint">On a phone, tap the button. On a computer, scan the code with GPay, PhonePe, Paytm or any UPI app.</p></div></div>
+    <div class="box"><div class="field full"><label for="payRef">UPI reference number (optional)</label><input id="payRef" inputmode="numeric" maxlength="24" placeholder="The number shown after you pay"><span class="hint">Sreez checks the payment on her side and then confirms your order.</span></div></div>
+    <div class="btns"><button class="btn" id="payDone" type="button">I have paid, place my order</button><button class="btn ghost" id="payLater" type="button">Place order and pay later</button></div>
+    <a class="hint" href="#checkout" id="payBack">‹ Change my details</a></div>`;
+  window.scrollTo(0,0);
+  loadQr().then(()=>{ const q=qrcode(0,'M'); q.addData(upiLink(amt)); q.make(); if($('payQr')) $('payQr').innerHTML=q.createSvgTag({cellSize:4,margin:2,scalable:true}); }).catch(()=>{ if($('payQr')) $('payQr').hidden=true; });
+}
+document.addEventListener('click',e=>{ const t=e.target.closest('#payDone,#payLater,#payCopy'); if(!t) return;
+  if(t.id==='payCopy'){ const v=$('payId').textContent; (navigator.clipboard?navigator.clipboard.writeText(v):Promise.reject()).then(()=>toast('UPI ID copied.'),()=>toast('Copy this UPI ID: '+v)); return; }
+  if(t.disabled) return; t.disabled=true; t.textContent='Placing your order…';
+  placeOrder(t.id==='payDone'?{paid:true,ref:$('payRef').value.replace(/[^\w-]/g,'').slice(0,24)}:{paid:false}); });
+async function placeOrder(pay){
+  if($('ckForm')){ ckv={}; ['ckName','ckPhone','ckDel','ckAddr','ckDate','ckNotes'].forEach(k=>ckv[k]=$(k)?$(k).value.trim():''); }
+  if(!ckv||!bag.length){ location.hash='checkout'; return; }
+  const val=id=>ckv[id]||'', L=bagLead(), del=val('ckDel');
   if(del.startsWith('Deliver')&&!val('ckAddr')){ $('ckAddr').focus(); return toast('Add your delivery address, or choose Collect from the studio.'); }
+  const due=advDue();
+  if(due&&!pay) return payStep();
+  const payLine=!due?'':pay.paid?`Payment: customer says ${inr(due)} was paid by UPI${pay.ref?', reference '+pay.ref:''}. Please check before confirming.`:`Payment: not paid yet. Advance to collect: ${inr(due)}.`;
   const lines=[`Hi Sreez, this is ${val('ckName')}. I would like to place an order:`].concat(bag.map((b,i)=>`${i+1}. ${prod(b.id).name} (${b.size})${effPrice(prod(b.id))?' - '+inr(effPrice(prod(b.id))):''}`));
   lines.push(`Phone: ${val('ckPhone')}`,`Delivery: ${del}`);
   if(val('ckAddr')) lines.push(`Address: ${val('ckAddr').replace(/\s*\n\s*/g,', ')}`);
   if(val('ckDate')) lines.push(`Needed by: ${val('ckDate')}`);
   if(val('ckNotes')) lines.push(`Notes: ${val('ckNotes').replace(/\s*\n\s*/g,' ')}`);
   lines.push(`Estimated total: ${totTxt()}`);
+  if(payLine) lines.push(payLine);
   const msg=lines.join('\n');
-  const steps=`<ol class="steps"><li><b>Sreez confirms</b><span>She checks the design, your size and the date, and shares the final price.</span></li><li><b>Pay the advance</b><span>${SITE.payment?nl(SITE.payment):'She tells you how much to pay in advance and how.'}</span></li><li><b>Stitching${L?', about '+dayTxt(L):''}</b><span>Your piece is cut and stitched to your measurements.</span></li><li><b>Fitting and delivery</b><span>Final adjustments, then pickup or delivery.</span></li></ol>`;
+  const steps=`<ol class="steps"><li><b>Sreez confirms</b><span>She checks the design, your size and the date, and shares the final price.</span></li><li><b>${due&&pay.paid?'Advance checked':'Pay the advance'}</b><span>${due&&pay.paid?'She checks your UPI payment of '+inr(due)+'.':SITE.payment?nl(SITE.payment):'She tells you how much to pay in advance and how.'}</span></li><li><b>Stitching${L?', about '+dayTxt(L):''}</b><span>Your piece is cut and stitched to your measurements.</span></li><li><b>Fitting and delivery</b><span>Final adjustments, then pickup or delivery.</span></li></ol>`;
   let placed=false;
   if(SB.on){ const go=document.querySelector('#ckForm [type=submit]'); if(go){ if(go.disabled) return; go.disabled=true; go.textContent='Placing your order…'; }
-    const note=[`Delivery: ${del}`]; if(val('ckAddr')) note.push('Address: '+val('ckAddr').replace(/\s*\n\s*/g,', ')); if(val('ckNotes')) note.push('Notes: '+val('ckNotes'));
+    const note=[`Delivery: ${del}`]; if(val('ckAddr')) note.push('Address: '+val('ckAddr').replace(/\s*\n\s*/g,', ')); if(val('ckNotes')) note.push('Notes: '+val('ckNotes')); if(payLine) note.push(payLine);
     try{ await SB.createOrder({createdAt:new Date().toISOString(),customer:val('ckName').slice(0,80),phone:val('ckPhone').replace(/[^\d+]/g,'').slice(0,20),channel:'Website',status:'New',
         items:bag.slice(0,30).map(b=>({pid:b.id,name:prod(b.id).name,size:b.size,price:effPrice(prod(b.id))})),due:/^\d{4}-\d{2}-\d{2}$/.test(val('ckDate'))?val('ckDate'):'',discount:0,advance:0,measurements:'',notes:note.join('\n').slice(0,1500)});
       placed=true; }catch(e){} }
