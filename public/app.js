@@ -26,20 +26,22 @@ const addDays=n=>{ const d=new Date(); d.setDate(d.getDate()+n); return d.getFul
 const CLOCK='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>';
 const effPrice=p=>p.price?(p.offerPrice&&p.offerPrice<p.price?p.offerPrice:p.price):0;
 let isAdmin=false; const cap={};
+/* owner-only "to add" placeholders on the shop pages are switched off: the owner sees exactly what customers see */
+const HINTS=false;
 const SITE=DATA.site;
 const P=()=>DATA.products.filter(p=>!p.hidden);
 const inColl=c=>P().filter(p=>p.c.includes(c.id));
-const COLL=()=>DATA.collections.filter(c=>!c.hidden&&(isAdmin||c.cover||inColl(c).length));
+const COLL=()=>DATA.collections.filter(c=>!c.hidden&&(HINTS||c.cover||inColl(c).length));
 const coll=id=>DATA.collections.find(c=>c.id===id&&!c.hidden), prod=id=>P().find(p=>p.id===id);
 const pcoll=p=>p.c.map(coll).find(Boolean);
 const OFFERS=()=>DATA.offers.filter(o=>o.active!==false);
 /* styling tips: Instagram posts and reels the owner picked, shown with Instagram's own embed player */
 const tipList=()=>(Array.isArray(SITE.tips)?SITE.tips:[]).map(u=>{ const m=String(u).match(/instagram\.com\/(?:[\w.]+\/)?(p|reel|reels|tv)\/([\w-]+)/i); return m?{kind:m[1].toLowerCase()==='p'?'p':'reel',code:m[2]}:null; }).filter(Boolean).slice(0,12);
-const tipsHTML=()=>{ if(SITE.tipsOn===false) return ''; const t=tipList(); if(!t.length) return isAdmin?`<section><div class="head"><h2>Styling tips</h2></div><p class="lede">${todo('to add')} Paste links to your Instagram posts in Manage shop, Shop details, Styling tips.</p></section>`:'';
+const tipsHTML=()=>{ if(SITE.tipsOn===false) return ''; const t=tipList(); if(!t.length) return HINTS?`<section><div class="head"><h2>Styling tips</h2></div><p class="lede">${todo('to add')} Paste links to your Instagram posts in Manage shop, Shop details, Styling tips.</p></section>`:'';
   return `<section><div class="head"><h2>Styling tips</h2><a href="${igUrl()}" rel="noopener">Follow on Instagram</a></div><p class="lede">Ideas from Sreeja on what to wear and how to style it.</p>
     <div class="prow tips">${t.map(x=>`<div class="tip"><iframe src="https://www.instagram.com/${x.kind}/${x.code}/embed/" title="Styling tip from Sreez on Instagram" loading="lazy" allowtransparency="true" allowfullscreen scrolling="no"></iframe><a href="https://www.instagram.com/${x.kind}/${x.code}/" rel="noopener">Open on Instagram</a></div>`).join('')}</div></section>`; };
 const igUrl=()=>'https://www.instagram.com/'+SITE.ig, igDm=()=>'https://ig.me/m/'+SITE.ig;
-const todo=t=>isAdmin?`<span class="todo">${t}</span>`:'';
+const todo=t=>HINTS?`<span class="todo">${t}</span>`:'';
 const waLink=(msg,num)=>`https://wa.me/${num||SITE.wa}?text=${encodeURIComponent(msg)}`;
 const priceHTML=p=>p.price?(p.offerPrice&&p.offerPrice<p.price?`<span class="price">${inr(p.offerPrice)} <s>${inr(p.price)}</s></span>`:`<span class="price">${inr(p.price)}</span>`):'<span class="price">Price on request</span>';
 const fmtDate=d=>{ if(!d) return ''; const x=new Date(d+(d.length===10?'T00:00:00':'')); return isNaN(x)?d:x.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}); };
@@ -74,7 +76,7 @@ const stepsHTML=`<ol class="steps">
   <li><b>Send your measurements</b><span>Choose a standard size or share your own measurements for a made-to-measure fit.</span></li>
   <li><b>Cutting and stitching</b><span>The pattern is drafted for you and the piece is stitched from scratch.</span></li>
   <li><b>Fitting and delivery</b><span>Final adjustments are made before the piece is handed over or shipped.</span></li></ol>`;
-const offerMeta=o=>`${o.discount?`<dt>Discount</dt><dd>${esc(o.discount)}</dd>`:(isAdmin?`<dt>Discount</dt><dd>${todo('to add')}</dd>`:'')}${o.validUntil?`<dt>Valid until</dt><dd>${fmtDate(o.validUntil)}</dd>`:(isAdmin?`<dt>Valid until</dt><dd>${todo('to add')}</dd>`:'')}`;
+const offerMeta=o=>`${o.discount?`<dt>Discount</dt><dd>${esc(o.discount)}</dd>`:(HINTS?`<dt>Discount</dt><dd>${todo('to add')}</dd>`:'')}${o.validUntil?`<dt>Valid until</dt><dd>${fmtDate(o.validUntil)}</dd>`:(HINTS?`<dt>Valid until</dt><dd>${todo('to add')}</dd>`:'')}`;
 
 const AV=()=>SITE.avatar||SITE.portrait, avImg=()=>AV()?`<img src="${esc(imgSrc(AV()))}" alt="Sreeja Balagan" loading="lazy">`:'';
 const firstPara=t=>String(t||'').split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean);
@@ -130,7 +132,7 @@ shop(cid){
   <div class="crumbs"><a href="#home">Home</a><span>/</span>${c?`<a href="#collections">Collections</a><span>/</span><span>${esc(c.name)}</span>`:'<span>Shop</span>'}</div>
   <div class="pagehead"><h1>${s?'Search results':(c?esc(c.name):'All designs')}</h1><p class="lede">${s?`${list.length} ${list.length===1?'design matches':'designs match'} "${esc(q)}"`:(c?esc(c.blurb):'Everything Sreez makes, across all collections.')}</p></div>
   <div class="chips"><a class="chip" href="#shop" aria-current="${!c}">All</a>${COLL().map(x=>`<a class="chip" href="#c-${x.id}" aria-current="${!!c&&c.id===x.id}">${esc(x.name)}</a>`).join('')}</div>
-  <div class="grid">${(list.map(card).join('')+(isAdmin&&c&&!s&&!list.length?phCard(c.name).repeat(2):''))||`<p class="empty">${s?'No designs match that search. Try a collection name such as Maxi or Blouse.':'New designs are on the way.'}</p>`}</div>`},
+  <div class="grid">${(list.map(card).join('')+(HINTS&&c&&!s&&!list.length?phCard(c.name).repeat(2):''))||`<p class="empty">${s?'No designs match that search. Try a collection name such as Maxi or Blouse.':'New designs are on the way.'}</p>`}</div>`},
 
 product(id){
   const p=prod(id); if(!p) return V.shop();
@@ -147,15 +149,15 @@ product(id){
       <p>${nl(p.desc)}</p>
       <div><div class="label" style="margin-bottom:8px">Size</div><div class="sizes" id="pSizes"></div>
         <p class="hint" style="margin-top:8px"><a href="#help">Size guide and how to measure</a> · Measurements are confirmed with you before stitching.</p></div>
-      ${lead(p)?`<p class="lead">${CLOCK}Stitched in about ${dayTxt(lead(p))} after your measurements are confirmed</p>`:(isAdmin?`<p class="lead">${CLOCK}Stitching time ${todo('to add in Manage shop')}</p>`:'')}
+      ${lead(p)?`<p class="lead">${CLOCK}Stitched in about ${dayTxt(lead(p))} after your measurements are confirmed</p>`:(HINTS?`<p class="lead">${CLOCK}Stitching time ${todo('to add in Manage shop')}</p>`:'')}
       <div class="buyrow"><button class="btn block" id="pAdd" disabled>Choose a size</button><button class="btn ghost block" id="pBuy" disabled>Buy now</button></div>
       <ol class="buysteps"><li>Add the design to your cart, or tap Buy now.</li><li>Check out with your name, phone and delivery choice.</li><li>Sreez confirms the price and date with you, then stitching starts.</li></ol>
       <button class="btn ghost block" data-custom="${p.id}">Want changes? Customise this design</button>
       <a class="byline" href="#about">${avImg()}<span><b>Designed and stitched by Sreeja Balagan</b>NIFT graduate, fashion designer and stylist</span></a>
       <div>
         <details open><summary>Details</summary><p>${esc(p.tag)}${p.tag?'. ':''}Stitched to order${lead(p)?' in about '+dayTxt(lead(p)):''}. Colour and fabric can be changed on request.</p></details>
-        ${p.fabric||isAdmin?`<details><summary>Fabric and care</summary><p>${p.fabric?nl(p.fabric):todo('To add for this design')}</p></details>`:''}
-        ${SITE.delivery||SITE.alterations||isAdmin?`<details><summary>Delivery and alterations</summary><p>${SITE.delivery||SITE.alterations?nl([SITE.delivery,SITE.alterations].filter(Boolean).join('\n')):todo('Stitching time, delivery and alteration terms to add')}</p></details>`:''}
+        ${p.fabric||HINTS?`<details><summary>Fabric and care</summary><p>${p.fabric?nl(p.fabric):todo('To add for this design')}</p></details>`:''}
+        ${SITE.delivery||SITE.alterations||HINTS?`<details><summary>Delivery and alterations</summary><p>${SITE.delivery||SITE.alterations?nl([SITE.delivery,SITE.alterations].filter(Boolean).join('\n')):todo('Stitching time, delivery and alteration terms to add')}</p></details>`:''}
       </div>
     </div>
   </div>
@@ -206,19 +208,19 @@ product(id){
 offers(){const offers=OFFERS(); return `
   <div class="crumbs"><a href="#home">Home</a><span>/</span><span>Offers</span></div>
   <div class="pagehead"><h1>Offers</h1><p class="lede">${offers.length?'Current offers on custom orders. Mention the offer when you send your enquiry.':'There are no offers running right now. Follow Sreez on Instagram to hear about the next one.'}</p></div>
-  ${SITE.offerBanner?`<img src="${esc(imgSrc(SITE.offerBanner))}" alt="" style="width:100%;border-radius:var(--radius);margin-bottom:16px">`:(isAdmin?`<div class="ph" style="aspect-ratio:16/9;margin-bottom:16px"><span><b>Banner placeholder</b>Add an offer banner in Manage shop</span></div>`:'')}
+  ${SITE.offerBanner?`<img src="${esc(imgSrc(SITE.offerBanner))}" alt="" style="width:100%;border-radius:var(--radius);margin-bottom:16px">`:(HINTS?`<div class="ph" style="aspect-ratio:16/9;margin-bottom:16px"><span><b>Banner placeholder</b>Add an offer banner in Manage shop</span></div>`:'')}
   <div class="cards">${offers.map(o=>`<div class="box offer"><span class="otag">${esc(o.tag)}</span><b>${esc(o.title)}</b><span class="hint" style="font-size:14px">${esc(o.desc)}</span>
     <dl>${offerMeta(o)}</dl>
     <button class="btn ghost" data-offer="${esc(o.title)}">Use this offer</button></div>`).join('')}</div>
-  ${SITE.offerTerms?`<p class="hint" style="margin-top:16px">${nl(SITE.offerTerms)}</p>`:(isAdmin?`<p class="hint" style="margin-top:16px">Offer terms ${todo('to add')}</p>`:'')}`},
+  ${SITE.offerTerms?`<p class="hint" style="margin-top:16px">${nl(SITE.offerTerms)}</p>`:(HINTS?`<p class="hint" style="margin-top:16px">Offer terms ${todo('to add')}</p>`:'')}`},
 
 about(){ const paras=t=>String(t||'').split(/\n\s*\n/).filter(x=>x.trim()).map(x=>`<p>${nl(x.trim())}</p>`).join(''), sp=SITE.specialities||[]; return `
   <div class="crumbs"><a href="#home">Home</a><span>/</span><span>About</span></div>
   <div class="about">
-    ${SITE.portrait?`<img class="portrait" src="${esc(imgSrc(SITE.portrait))}" alt="Sreeja Balagan, founder of Sreez The Dress Maker">`:(isAdmin?`<div class="ph"><span><b>Image placeholder</b>Portrait of the designer, 4:5</span></div>`:'')}
+    ${SITE.portrait?`<img class="portrait" src="${esc(imgSrc(SITE.portrait))}" alt="Sreeja Balagan, founder of Sreez The Dress Maker">`:(HINTS?`<div class="ph"><span><b>Image placeholder</b>Portrait of the designer, 4:5</span></div>`:'')}
     <div><span class="eyebrow">About me</span><h1>Meet Sreeja Balagan</h1>
       <p class="role">Founder · Fashion Designer · Fashion Stylist</p>
-      ${SITE.story?paras(SITE.story):(isAdmin?`<p>${todo('To add: her story, location and years of work')}</p>`:'')}
+      ${SITE.story?paras(SITE.story):(HINTS?`<p>${todo('To add: her story, location and years of work')}</p>`:'')}
       ${SITE.quote?`<blockquote>${esc(SITE.quote)}<cite>Sreeja Balagan<span>Founder, Sreez The Dress Maker</span></cite></blockquote>`:''}
     </div>
   </div>
@@ -230,14 +232,14 @@ contact(){return `
   <div class="crumbs"><a href="#home">Home</a><span>/</span><span>Contact</span></div>
   <div class="pagehead"><h1>Contact</h1><p class="lede">For orders, fittings and questions about a design.</p></div>
   <div class="cards">
-    ${SITE.wa?`<div class="box"><b>WhatsApp</b><span class="contactline">${esc(SITE.waShow||'+'+SITE.wa)}</span><a class="btn ghost" href="${waLink('Hi Sreez, I have a question about a design.')}" rel="noopener">Chat on WhatsApp</a></div>`:(isAdmin?`<div class="box"><b>WhatsApp</b><span>Number ${todo('to add')}</span></div>`:'')}
+    ${SITE.wa?`<div class="box"><b>WhatsApp</b><span class="contactline">${esc(SITE.waShow||'+'+SITE.wa)}</span><a class="btn ghost" href="${waLink('Hi Sreez, I have a question about a design.')}" rel="noopener">Chat on WhatsApp</a></div>`:(HINTS?`<div class="box"><b>WhatsApp</b><span>Number ${todo('to add')}</span></div>`:'')}
     <div class="box"><b>Instagram</b><span class="contactline">@${esc(SITE.ig)}</span><a class="btn ghost" href="${igDm()}" rel="noopener">Message on Instagram</a></div>
-    ${SITE.address?`<div class="box"><b>Studio</b><span>${nl(SITE.address)}</span></div>`:(isAdmin?`<div class="box"><b>Studio</b><span>Address ${todo('to add')}</span></div>`:'')}
-    ${SITE.hours?`<div class="box"><b>Opening hours</b><span>${nl(SITE.hours)}</span></div>`:(isAdmin?`<div class="box"><b>Opening hours</b><span>Days and times ${todo('to add')}</span></div>`:'')}
+    ${SITE.address?`<div class="box"><b>Studio</b><span>${nl(SITE.address)}</span></div>`:(HINTS?`<div class="box"><b>Studio</b><span>Address ${todo('to add')}</span></div>`:'')}
+    ${SITE.hours?`<div class="box"><b>Opening hours</b><span>${nl(SITE.hours)}</span></div>`:(HINTS?`<div class="box"><b>Opening hours</b><span>Days and times ${todo('to add')}</span></div>`:'')}
   </div>
   <div class="band"><h2>Ready to order?</h2><p>Add designs to your cart and check out, or describe what you want made.</p><a class="btn" href="#custom-order">Start a custom order</a></div>`},
 
-help(){ const d=(title,val,hint)=>val?`<details><summary>${title}</summary><p>${nl(val)}</p></details>`:(isAdmin?`<details><summary>${title}</summary><p>${todo(hint)}</p></details>`:''); return `
+help(){ const d=(title,val,hint)=>val?`<details><summary>${title}</summary><p>${nl(val)}</p></details>`:(HINTS?`<details><summary>${title}</summary><p>${todo(hint)}</p></details>`:''); return `
   <div class="crumbs"><a href="#home">Home</a><span>/</span><span>Help</span></div>
   <div class="pagehead"><h1>Help</h1><p class="lede">Sizing, delivery and what happens after you order.</p></div>
   <div class="narrow">
@@ -311,7 +313,7 @@ function route(){
 function renderHomeTab(){
   const g=$('homeGrid'); if(!g) return;
   const c=coll(homeTab); if(!c) return; const list=inColl(c);
-  g.innerHTML=list.length?list.map(card).join(''):(isAdmin?phCard(c.name).repeat(3):'<p class="empty">New designs are on the way.</p>');
+  g.innerHTML=list.length?list.map(card).join(''):(HINTS?phCard(c.name).repeat(3):'<p class="empty">New designs are on the way.</p>');
   g.scrollLeft=0;
   $('homeAll').href='#c-'+c.id; $('homeAll').textContent='View all '+c.name;
   document.querySelectorAll('#homeTabs .chip').forEach(b=>b.setAttribute('aria-current',b.dataset.tab===homeTab));
@@ -375,7 +377,7 @@ function chrome(){
   const cs=COLL();
   $('menuBody').innerHTML='<a href="#home">Home</a><a href="#shop">Shop all</a>'+cs.map(c=>`<a class="sub" href="#c-${c.id}">${esc(c.name)}</a>`).join('')+'<a href="#offers">Offers</a><a href="#custom-order">Custom order</a><a href="#about">About</a><a href="#contact">Contact</a><a href="#help">Help</a>'+(isAdmin?'<a href="#manage">Manage shop</a>':'');
   $('footColl').innerHTML='<li><a href="#collections">All collections</a></li>'+cs.slice(0,6).map(c=>`<li><a href="#c-${c.id}">${esc(c.name)}</a></li>`).join('');
-  $('footVisit').innerHTML=[SITE.address?esc(SITE.address):(isAdmin?'Studio address '+todo('to add'):''),SITE.hours?esc(SITE.hours):(isAdmin?'Opening hours '+todo('to add'):''),SITE.wa?'WhatsApp '+esc(SITE.waShow||'+'+SITE.wa):''].filter(Boolean).map(x=>`<li>${x}</li>`).join('');
+  $('footVisit').innerHTML=[SITE.address?esc(SITE.address):(HINTS?'Studio address '+todo('to add'):''),SITE.hours?esc(SITE.hours):(HINTS?'Opening hours '+todo('to add'):''),SITE.wa?'WhatsApp '+esc(SITE.waShow||'+'+SITE.wa):''].filter(Boolean).map(x=>`<li>${x}</li>`).join('');
   $('footIg').href=igUrl();
   document.querySelectorAll('[data-admin]').forEach(e=>e.hidden=!isAdmin);
 }
