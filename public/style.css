@@ -514,3 +514,9 @@ select.tin{max-width:44vw}
 /* custom order: studio visit */
 .covisit{font-weight:600;padding:4px 0}
 #coVisitBox .hint{font-size:13px;color:var(--muted)}
+
+/* styling tips: Instagram embeds */
+.tips{align-items:start}
+.tip{flex:0 0 min(326px,84vw);scroll-snap-align:start;display:grid;gap:6px}
+.tip iframe{width:100%;height:560px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+.tip a{font-size:13px;color:var(--muted);text-align:center}
