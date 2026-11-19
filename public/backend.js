@@ -14,6 +14,10 @@
   SB.createOrder=async o=>{ if(!on) throw new Error('off');
     const r=await fetch(base()+'orders?key='+encodeURIComponent(C.apiKey),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:enc(o).mapValue.fields})});
     if(!r.ok) throw new Error('order '+r.status); return (await r.json()).name.split('/').pop(); };
+  /* order alert: emails the owner through Web3Forms when an order is placed. The key is a public form key (it can only send mail to its owner's inbox).
+     Never blocks or fails the order; the message leaves out the phone and address, which stay in the manager. */
+  SB.notify=(key,subject,text)=>{ if(!key) return Promise.resolve(false);
+    return fetch('https://api.web3forms.com/submit',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({access_key:key,subject,from_name:'Sreez website',message:text})}).then(r=>r.ok,()=>false); };
   /* photos the owner uploads from the manager are kept in the database and shown from there */
   const PX='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', cache=new Map();
   SB.imgRef=id=>PX+'#a:'+id;
