@@ -10,9 +10,10 @@ const {chromium}=require('playwright');
       if(u.includes('site/catalogue')&&cat) return r.fulfill({contentType:'application/json',body:JSON.stringify({fields:{json:{stringValue:JSON.stringify(cat)}}})});
       r.fulfill({status:404,body:'{}'}); });
     const mails=[]; await pg.route('https://api.web3forms.com/**',r=>{ mails.push(JSON.parse(r.request().postData())); r.fulfill({contentType:'application/json',body:'{"success":true}'}); });
+    const was=[]; await pg.route('https://api.callmebot.com/**',r=>{ was.push(r.request().url()); r.fulfill({body:'ok'}); });
     await pg.route('https://fonts.g*/**',r=>r.abort());
     await pg.goto('http://localhost:8766/index.html'); await pg.waitForTimeout(500);
-    cat=await pg.evaluate(()=>JSON.parse(JSON.stringify(DATA))); cat.site.upi='sreez@okaxis'; cat.site.upiName='Sreeja B'; cat.site.notifyKey='KEY1';
+    cat=await pg.evaluate(()=>JSON.parse(JSON.stringify(DATA))); cat.site.upi='sreez@okaxis'; cat.site.upiName='Sreeja B'; cat.site.notifyKey='KEY1'; cat.site.waAlertTo='91 98765 00000'; cat.site.waAlertKey='555';
     const priced=cat.products.find(p=>!p.hidden&&p.price)||cat.products.find(p=>!p.hidden); if(!priced.price) priced.price=2400;
     for(const [mode,btn] of [['paid','#payDone'],['later','#payLater']]){
       await pg.evaluate(()=>localStorage.removeItem('sreezBag'));
@@ -32,6 +33,7 @@ const {chromium}=require('playwright');
       ok(/has reached Sreez/.test(await pg.textContent('#view')),w+' '+mode+' confirmation');
     }
     ok(posted.length===2,w+' two orders');
+    ok(was.length===2&&was[0].includes('phone=%2B919876500000')&&was[0].includes('apikey=555')&&decodeURIComponent(was[0]).includes('Customer: Asha'),w+' WhatsApp alert '+(was[0]||'').slice(0,90));
     ok(mails.length===2&&mails[0].access_key==='KEY1'&&/New order on the website from Asha/.test(mails[0].subject)&&/#manage/.test(mails[0].message)&&!/9876543210/.test(mails[0].message),w+' alert email: '+(mails[0]?mails[0].message.replace(/\n/g,' | '):''));
     // no UPI set: no pay step
     cat.site.upi=''; await pg.evaluate(()=>localStorage.removeItem('sreezBag'));

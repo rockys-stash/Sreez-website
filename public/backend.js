@@ -18,6 +18,9 @@
      Never blocks or fails the order; the message leaves out the phone and address, which stay in the manager. */
   SB.notify=(key,subject,text)=>{ if(!key) return Promise.resolve(false);
     return fetch('https://api.web3forms.com/submit',{method:'POST',headers:{'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify({access_key:key,subject,from_name:'Sreez website',message:text})}).then(r=>r.ok,()=>false); };
+  /* WhatsApp alert to the owner's own number through CallMeBot (free, unofficial). Never blocks or fails the order. */
+  SB.notifyWa=(phone,key,text)=>{ phone=String(phone||'').replace(/\D/g,''); if(!phone||!key) return Promise.resolve(false);
+    return fetch('https://api.callmebot.com/whatsapp.php?phone='+encodeURIComponent('+'+phone)+'&text='+encodeURIComponent(text)+'&apikey='+encodeURIComponent(key),{mode:'no-cors'}).then(()=>true,()=>false); };
   /* photos the owner uploads from the manager are kept in the database and shown from there */
   const PX='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', cache=new Map();
   SB.imgRef=id=>PX+'#a:'+id;
