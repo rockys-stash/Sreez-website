@@ -35,7 +35,7 @@ const pcoll=p=>p.c.map(coll).find(Boolean);
 const OFFERS=()=>DATA.offers.filter(o=>o.active!==false);
 /* styling tips: Instagram posts and reels the owner picked, shown with Instagram's own embed player */
 const tipList=()=>(Array.isArray(SITE.tips)?SITE.tips:[]).map(u=>{ const m=String(u).match(/instagram\.com\/(?:[\w.]+\/)?(p|reel|reels|tv)\/([\w-]+)/i); return m?{kind:m[1].toLowerCase()==='p'?'p':'reel',code:m[2]}:null; }).filter(Boolean).slice(0,12);
-const tipsHTML=()=>{ const t=tipList(); if(!t.length) return isAdmin?`<section><div class="head"><h2>Styling tips</h2></div><p class="lede">${todo('to add')} Paste links to your Instagram posts in Manage shop, Shop details, Styling tips.</p></section>`:'';
+const tipsHTML=()=>{ if(SITE.tipsOn===false) return ''; const t=tipList(); if(!t.length) return isAdmin?`<section><div class="head"><h2>Styling tips</h2></div><p class="lede">${todo('to add')} Paste links to your Instagram posts in Manage shop, Shop details, Styling tips.</p></section>`:'';
   return `<section><div class="head"><h2>Styling tips</h2><a href="${igUrl()}" rel="noopener">Follow on Instagram</a></div><p class="lede">Ideas from Sreeja on what to wear and how to style it.</p>
     <div class="prow tips">${t.map(x=>`<div class="tip"><iframe src="https://www.instagram.com/${x.kind}/${x.code}/embed/" title="Styling tip from Sreez on Instagram" loading="lazy" allowtransparency="true" allowfullscreen scrolling="no"></iframe><a href="https://www.instagram.com/${x.kind}/${x.code}/" rel="noopener">Open on Instagram</a></div>`).join('')}</div></section>`; };
 const igUrl=()=>'https://www.instagram.com/'+SITE.ig, igDm=()=>'https://ig.me/m/'+SITE.ig;
@@ -493,7 +493,10 @@ offers(){ const n=DATA.offers.length;
 shop(){ bo=SITE; return {title:'Shop details',body:`
   ${pn('Contact',`<div class="fgrid">${fld('WhatsApp number','wa',{ph:'919876543210',hint:'Digits only, with country code. Turns on the Send on WhatsApp buttons.'})}${fld('WhatsApp number as shown','waShow',{ph:'+91 98765 43210'})}${fld('Instagram username','ig')}${fld('Opening hours','hours',{ph:'Mon to Sat, 10 am to 7 pm'})}${fld('Studio address','address',{area:1})}</div>`,'Shown on the Contact page and in the footer.')}
   ${pn('Top banner',`<div class="fgrid">${fld('Message at the top of every page','announce',{full:1})}</div>`)}
-  ${pn('Styling tips',`<div class="fgrid">${fld('Instagram posts to show','tips',{area:1,t:'lines',ph:'https://www.instagram.com/reel/...',hint:'One link per line, newest first, up to 12. In Instagram, open the post or reel, tap Share, then Copy link.'})}</div>`,'Shown on the home page as a Styling tips row. Leave empty to hide it.')}
+  ${pn('Styling tips',`<label class="check"><input type="checkbox" data-k="tipsOn" data-t="bool"${SITE.tipsOn!==false?' checked':''}>Show the Styling tips section on the website</label>
+    <div class="tipadd"><div class="field"><label for="tipNew">Paste an Instagram link</label><input id="tipNew" inputmode="url" placeholder="https://www.instagram.com/reel/..."></div><button class="btn sm" data-a="tip-add">Add</button></div>
+    <span class="hint">In Instagram, open the post or reel, tap Share, then Copy link. Up to 12.</span>
+    ${(SITE.tips||[]).length?`<div class="tiplist">${SITE.tips.map((u,i)=>`<div class="tiprow"><span class="tipno">${i+1}</span><input data-tip="${i}" value="${esc(u)}" aria-label="Instagram link ${i+1}"><button class="mini" data-a="tip-rm" data-v="${i}">Remove</button></div>`).join('')}</div>`:'<p class="tempty">No posts added yet.</p>'}`,'Shown on the home page as a Styling tips row, in this order. Untick the box to hide the section without losing your links.')}
   ${pn('About page',`<div class="fgrid">${fld('Her story','story',{area:1,hint:'Leave an empty line between paragraphs.'})}${fld('Quote shown under the story','quote',{area:1})}${fld('Specialities','specialities',{area:1,t:'lines',hint:'One speciality per line.'})}${fld('My USP','usp',{area:1})}${fld('My vision','vision',{area:1})}<div class="field"><label>Portrait photo</label>${onePhoto('portrait')}<span class="hint">The large photo on the About and home pages.</span></div><div class="field"><label>Small round photo</label>${onePhoto('avatar')}<span class="hint">Her face, shown beside each design and on the custom order note. Uses the portrait if empty.</span></div></div>`,'Leave a box empty to hide that part of the About page.')}
   ${pn('Ordering',`<div class="fgrid">${fld('Usual stitching time (days)','leadDays',{t:'num',ph:'For example 10',hint:'Shown on every design, in the cart and at checkout. A design can have its own time in Designs.'})}${fld('UPI ID for payments','upi',{ph:'For example name@okhdfcbank',hint:'Turns on the payment step at checkout, with a QR code and a pay button.'})}${fld('Name shown to the payer','upiName',{ph:'Sreez The Dress Maker'})}${fld('Advance to collect (%)','advancePct',{t:'num',ph:'50',hint:'Share of the order total asked at checkout. Use 100 for full payment. Empty means 50.'})}${fld('Payment','payment',{area:1,ph:'Payment methods and advance'})}${fld('Order alert key','notifyKey',{ph:'Access key from web3forms.com',hint:'Emails you each time an order is placed on the website. Get a free access key at web3forms.com with the email that should receive the alerts, and paste it here.'})}${fld('WhatsApp alert number','waAlertTo',{ph:'919876543210',hint:'Digits only, with country code. The WhatsApp number that gets a message for each order.'})}${fld('WhatsApp alert key','waAlertKey',{ph:'Key from CallMeBot',hint:'From that WhatsApp number, message the CallMeBot bot to get a key (steps at callmebot.com), and paste it here.'})}</div>`,'What customers are told when they buy. Payment is asked only when every design in the cart has a price.')}
   ${pn('Help page',`<div class="fgrid">${fld('Size chart','sizeChart',{area:1,ph:'S: bust 34, waist 28, hip 36 ...'})}${fld('Delivery','delivery',{area:1,ph:'Stitching time, shipping areas and charges'})}${fld('Alterations and returns','alterations',{area:1})}</div>`)}
@@ -582,6 +585,12 @@ async function adminAct(a,v,el){
   else if(a==='new-order'){ const o=newOrder(); o.items.push({pid:'',name:'',size:'',price:0}); aEdit={kind:'order',obj:o}; }
   else if(a==='add-item') aEdit.obj.items.push({pid:'',name:'',size:'',price:0});
   else if(a==='rm-item') aEdit.obj.items.splice(+v,1);
+  else if(a==='tip-add'){ const u=$('tipNew').value.trim(); if(!Array.isArray(SITE.tips)) SITE.tips=[];
+    if(!/instagram\.com\/(?:[\w.]+\/)?(p|reel|reels|tv)\/[\w-]+/i.test(u)) return toast('That is not an Instagram post or reel link. Copy the link from the Share menu of the post.');
+    if(SITE.tips.length>=12) return toast('You can show up to 12 posts. Remove one first.');
+    if(SITE.tips.includes(u)) return toast('That post is already in the list.');
+    SITE.tips.unshift(u); markDirty(); }
+  else if(a==='tip-rm'){ SITE.tips.splice(+v,1); markDirty(); }
   else if(a==='save-order'){ if(busy) return; const o=aEdit.obj; if(!o.customer.trim()) return toast('Add the customer name first.'); if(!cap.db) return toast('Orders cannot be saved in this view.');
     o.items=o.items.filter(i=>i.name.trim()); o.items.forEach(i=>{ const p=DATA.products.find(p=>p.name===i.name); i.pid=p?p.id:''; i.price=Number(i.price)||0; });
     o.updatedAt=new Date().toISOString(); const d=Object.assign({},o); delete d.id; busy='ord';
@@ -611,6 +620,7 @@ async function adminAct(a,v,el){
 document.addEventListener('input',e=>{ const el=e.target;
   if(el.dataset.q&&isAdmin){ if(el.dataset.q==='pSearch') pSearch=el.value; else oSearch=el.value; renderAdmin(); const s=$(el.id); if(s){ s.focus(); try{ s.setSelectionRange(s.value.length,s.value.length); }catch(e){} } return; }
   if(!isAdmin||!onManage()) return;
+  if('tip' in el.dataset){ SITE.tips[+el.dataset.tip]=el.value.trim(); markDirty(); return; }
   if(el.dataset.k&&bo){ const t=el.dataset.t; bo[el.dataset.k]=t==='bool'?el.checked:t==='lines'?el.value.split('\n').map(x=>x.trim()).filter(Boolean):t==='num'?(el.value.trim()===''?null:(Number(el.value.replace(/[^\d.]/g,''))||0)):el.value;
     if(el.dataset.k==='wa') bo.wa=el.value.replace(/\D/g,'');
     if(aEdit&&aEdit.kind==='order') oSum(); else { markDirty(); const pv=$('pPrev'); if(pv&&aEdit) pv.innerHTML=priceHTML(aEdit.obj); } }

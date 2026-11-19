@@ -17,6 +17,7 @@ const {chromium}=require('playwright');
     ok(JSON.stringify(srcs)===JSON.stringify(['https://www.instagram.com/reel/DAbc_12-x/embed/','https://www.instagram.com/p/CxYz123/embed/','https://www.instagram.com/reel/Dzz9/embed/']),w+' embeds '+srcs.join(' '));
     const over=await pg.evaluate(()=>document.documentElement.scrollWidth-innerWidth); ok(over<=1,w+' no overflow '+over);
     await pg.locator('.tips').scrollIntoViewIfNeeded(); await pg.waitForTimeout(300); await pg.screenshot({path:'/tmp/claude-0/-home-user/f6d5a27d-639e-5c8e-8f0d-89ddb1cbc0c9/scratchpad/tips'+w+'.png'});
+    cat.site.tipsOn=false; await pg.reload(); await pg.waitForTimeout(700); ok(await pg.locator('.tips').count()===0,w+' hidden when switched off');
     ok(errs.length===0,w+' no page errors '+errs.join('|'));
     await ctx.close();
   }

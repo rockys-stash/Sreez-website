@@ -67,6 +67,15 @@ const FAKE=`window.firebase=(function(){
     ok(await pg.evaluate(()=>window.__st.docs['orders/w1'].no)===1,w+' order numbered');
     for(const t of ['products','collections','offers','shop','insights','orders']){ await pg.click(`.mgtab[data-v="${t}"]`); await pg.waitForTimeout(150); }
     await pg.click('.mgtab[data-v="shop"]'); await pg.waitForTimeout(200);
+    await pg.uncheck('[data-k="tipsOn"]'); ok(await pg.evaluate(()=>SITE.tipsOn)===false,w+' tips switch off'); await pg.check('[data-k="tipsOn"]'); ok(await pg.evaluate(()=>SITE.tipsOn)===true,w+' tips switch on');
+    await pg.fill('#tipNew','hello'); await pg.click('[data-a="tip-add"]'); await pg.waitForTimeout(150);
+    ok(await pg.locator('.tiprow').count()===0,w+' bad tip link refused');
+    await pg.fill('#tipNew','https://www.instagram.com/reel/AAA111/'); await pg.click('[data-a="tip-add"]'); await pg.waitForTimeout(150);
+    await pg.fill('#tipNew','https://www.instagram.com/p/BBB222/'); await pg.click('[data-a="tip-add"]'); await pg.waitForTimeout(150);
+    ok(await pg.locator('.tiprow').count()===2&&await pg.inputValue('[data-tip="0"]')==='https://www.instagram.com/p/BBB222/',w+' tips added, newest first');
+    await pg.locator('.tiplist').scrollIntoViewIfNeeded(); await pg.screenshot({path:'/tmp/claude-0/-home-user/f6d5a27d-639e-5c8e-8f0d-89ddb1cbc0c9/scratchpad/tipmg'+w+'.png'});
+    await pg.click('[data-a="tip-rm"][data-v="1"]'); await pg.waitForTimeout(150);
+    ok(JSON.stringify(await pg.evaluate(()=>SITE.tips))==='["https://www.instagram.com/p/BBB222/"]',w+' tip removed');
     await pg.fill('[data-k="announce"]','New line'); await pg.waitForTimeout(100);
     await pg.locator('[data-k="announce"]').dispatchEvent('change'); await pg.waitForTimeout(600);
     ok(await pg.locator('#pubBar').isVisible(),w+' publish bar');

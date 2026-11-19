@@ -520,3 +520,11 @@ select.tin{max-width:44vw}
 .tip{flex:0 0 min(326px,84vw);scroll-snap-align:start;display:grid;gap:6px}
 .tip iframe{width:100%;height:560px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
 .tip a{font-size:13px;color:var(--muted);text-align:center}
+
+/* manager: styling tips links */
+.tipadd{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:end}
+.tipadd .btn{height:44px}
+.tiplist{display:grid;gap:8px;margin-top:6px}
+.tiprow{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center}
+.tiprow input{width:100%;min-width:0;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:13.5px;padding:0 10px}
+.tipno{font-size:13px;color:var(--muted);text-align:center}
