@@ -51,16 +51,27 @@ const ph=(title,sub,ratio)=>`<span class="ph" style="aspect-ratio:${ratio||'3/4'
 const cover=(c,ratio,big)=>{ const im=c.cover||(inColl(c)[0]||{imgs:[]}).imgs[0]; return im?(big?`<img ${big===1?'src':'data-defer data-src'}="${esc(imgSrc(im))}" alt=""${big===1?' fetchpriority="high"':''}>`:`<img ${tSrc(im)} alt="" loading="lazy" decoding="async">`):ph('Image placeholder',esc(c.name)+' cover',ratio); };
 const sendHTML=(taId,msg)=>`<div class="sendbox"><button class="btn block" data-copy="${taId}">Copy message</button>${SITE.wa?`<a class="btn ghost block" href="${waLink(msg)}" rel="noopener">Send on WhatsApp</a>`:''}<a class="btn ghost block" href="${igDm()}" rel="noopener">Open Instagram chat</a>
   <p class="hint">${SITE.wa?'WhatsApp opens with your message filled in. For Instagram, copy the message first and paste it into the chat.':'Copy the message, then paste it into the Instagram chat. Attach any reference photos there.'}</p></div>`;
+/* the rows of the Sreez measurement chart, in the chart's order */
+const MEAS=['Bust','Upper bust','Lower bust','Point','Shoulder','Front neck','Back neck','Sleeve length','Sleeve circumference','Arm hole','Yoke','Top length','Waist','Hip','Pant / skirt length','Full length'];
 const measureHTML=`<details><summary>How to measure</summary><p>Use a soft measuring tape, wear the inner wear you plan to wear with the outfit, and keep the tape snug but not tight. A second person makes this easier.</p>
   <ul class="plain" style="margin-top:8px;color:var(--muted);font-size:14px">
   <li><b>Bust</b>: around the fullest part of the chest, tape level across the back.</li>
+  <li><b>Upper bust</b>: around the chest just above the bust, under the arms.</li>
+  <li><b>Lower bust</b>: around the ribs just under the bust.</li>
+  <li><b>Point</b>: from the shoulder, near the neck, down to the fullest point of the bust.</li>
+  <li><b>Shoulder</b>: across the back from one shoulder edge to the other.</li>
+  <li><b>Front neck</b>: from the shoulder, near the neck, down to where you want the front neckline to sit.</li>
+  <li><b>Back neck</b>: from the shoulder, near the neck, down to where you want the back neckline to sit.</li>
+  <li><b>Sleeve length</b>: from the shoulder edge down to where you want the sleeve to end.</li>
+  <li><b>Sleeve circumference</b>: around the arm at the point where the sleeve ends.</li>
+  <li><b>Arm hole</b>: around the arm where it joins the shoulder, tape passing under the armpit.</li>
+  <li><b>Yoke</b>: from the shoulder, near the neck, down to where you want the yoke to end.</li>
+  <li><b>Top length</b>: from the shoulder, near the neck, down to where you want the top or blouse to end.</li>
   <li><b>Waist</b>: around the natural waist, the narrowest part of the body.</li>
   <li><b>Hip</b>: around the fullest part of the hips.</li>
-  <li><b>Shoulder</b>: across the back, from one shoulder point to the other.</li>
-  <li><b>Armhole</b>: around the arm where it joins the shoulder, passing under the armpit.</li>
-  <li><b>Upper arm</b>: around the fullest part of the upper arm.</li>
-  <li><b>Sleeve length</b>: from the shoulder point down to where the sleeve should end.</li>
-  <li><b>Length</b>: from the highest point of the shoulder down to where the garment should end.</li></ul>
+  <li><b>Pant / skirt length</b>: from the waist down to where you want the pant or skirt to end.</li>
+  <li><b>Full length</b>: from the shoulder, near the neck, down to where you want the outfit to end.</li>
+  </ul>
   <p>If you have a blouse or dress that fits you well, measuring it flat is a good cross-check.</p></details>`;
 let heroStart=Math.floor(Math.random()*1e6), heroLast=-1; try{ heroLast=+(sessionStorage.getItem('sreezHeroLast')??localStorage.getItem('sreezHeroLast')??-1); }catch(e){}
 let bag=[], pick=null, cur=null, q='', homeTab='', carTimer=null, draft={}, lbSet=[], lbI=0, bagName='';
@@ -172,7 +183,7 @@ product(id){
   <form id="coForm">
     <div class="row">
       <div class="field"><label for="coName">Your name</label><input id="coName" required autocomplete="name" maxlength="80"></div>
-      <div class="field"><label for="coPhone">Phone or WhatsApp number</label><input id="coPhone" type="tel" inputmode="tel" required autocomplete="tel" pattern="[0-9+ ()-]{8,20}" title="Your phone number, 8 to 20 digits"></div>
+      <div class="field"><label for="coPhone">Phone or WhatsApp number</label><input id="coPhone" type="tel" inputmode="tel" required autocomplete="tel" pattern="[0-9+ ()\\-]{8,20}" title="Your phone number, 8 to 20 digits"></div>
     </div>
     <div class="row">
       <div class="field"><label for="coType">Garment</label><select id="coType">${DATA.collections.filter(c=>!c.hidden).map(c=>`<option${d.type===c.name?' selected':''}>${esc(c.name)}</option>`).join('')}<option>Something else</option></select></div>
@@ -189,14 +200,7 @@ product(id){
     <div id="coMeas">
     <div class="field"><label for="coSize">Size</label><select id="coSize">${STD.map(s=>`<option>${s}</option>`).join('')}</select></div>
     <div class="row">
-      <div class="field"><label for="coBust">Bust (inches)</label><input id="coBust" inputmode="decimal"></div>
-      <div class="field"><label for="coWaist">Waist (inches)</label><input id="coWaist" inputmode="decimal"></div>
-      <div class="field"><label for="coHip">Hip (inches)</label><input id="coHip" inputmode="decimal"></div>
-      <div class="field"><label for="coShoulder">Shoulder (inches)</label><input id="coShoulder" inputmode="decimal"></div>
-      <div class="field"><label for="coArm">Armhole (inches)</label><input id="coArm" inputmode="decimal"></div>
-      <div class="field"><label for="coUpper">Upper arm (inches)</label><input id="coUpper" inputmode="decimal"></div>
-      <div class="field"><label for="coSleeve">Sleeve length (inches)</label><input id="coSleeve" inputmode="decimal"></div>
-      <div class="field"><label for="coLen">Length (inches)</label><input id="coLen" inputmode="decimal"></div>
+      ${MEAS.map((m,k)=>`<div class="field"><label for="coM${k}">${m} (inches)</label><input id="coM${k}" inputmode="decimal" maxlength="8"></div>`).join('')}
     </div>
     <div>${measureHTML}</div>
     </div>
@@ -730,7 +734,7 @@ document.addEventListener('submit',async e=>{
   const val=id=>$(id)?$(id).value.trim():'', visit=$('coVisit')&&$('coVisit').checked;
   if(visit&&!val('coVDate')){ $('coVDate').focus(); return toast('Choose the date you would like to visit the studio.'); }
   const vD=visit?new Date(val('coVDate')+'T00:00'):null, vDay=visit?['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][vD.getDay()]+', '+vD.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][vD.getMonth()]+' '+vD.getFullYear():'', vTxt=visit?`${vDay}, ${val('coVTime')}`:'';
-  const m=visit?'':[['Bust','coBust'],['Waist','coWaist'],['Hip','coHip'],['Shoulder','coShoulder'],['Armhole','coArm'],['Upper arm','coUpper'],['Sleeve length','coSleeve'],['Length','coLen']].filter(x=>val(x[1])).map(x=>`${x[0]} ${val(x[1])} in`).join(', ');
+  const m=visit?'':MEAS.map((m,k)=>[m,val('coM'+k)]).filter(x=>x[1]).map(x=>`${x[0]} ${x[1]} in`).join(', ');
   const lines=[`Hi Sreez, this is ${val('coName')}. I would like a custom order.`,`Garment: ${val('coType')}`], extra=[`Garment: ${val('coType')}`];
   const add=(l,keep)=>{ lines.push(l); if(keep) extra.push(l); };
   if(val('coDesign')) add(`Starting design: ${val('coDesign')}`);
