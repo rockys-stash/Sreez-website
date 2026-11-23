@@ -222,6 +222,7 @@ product(id){
     <div>${measureHTML}</div>
     </div>
     <div class="field"><label for="coNotes">Design notes</label><textarea id="coNotes" placeholder="Colour, fabric, neckline, sleeve, a design from this site"></textarea></div>
+    <div class="field"><label for="coPics">Photos of a design you like (optional)</label><input id="coPics" type="file" accept="image/*" multiple><span class="hint">Add up to ${REF_MAX} photos or screenshots, so Sreez can see what you have in mind. Only Sreez can see them.</span><div class="copics" id="coPicList"></div></div>
     <button class="btn block" type="submit">${SB.on?'Send my custom order':'Create my message'}</button>
   </form>
   <div id="coOut" style="margin-top:16px"></div></section>`},
@@ -449,7 +450,12 @@ async function numberOrders(){ if(numbering) return; const todo=ORD.filter(o=>!o
   let n=ORD.reduce((m,o)=>Math.max(m,o.no||0),0);
   try{ for(const o of todo) await cap.db.collection('orders').doc(o.id).set({no:++n},{merge:true}); }catch(e){} numbering=false; }
 const onManage=()=>location.hash==='#manage';
-function renderAdmin(){ const y=window.scrollY; $('view').innerHTML=V.manage(); oSum(); window.scrollTo(0,y); }
+function renderAdmin(){ const y=window.scrollY; $('view').innerHTML=V.manage(); oSum(); fillRefs(); window.scrollTo(0,y); }
+/* design photos a customer attached to a custom order: the order's notes carry their ids, and only the owner can load them */
+const refIds=o=>[...new Set((String(o.notes||'').match(/\bref:[\w-]{6,40}/g)||[]).map(x=>x.slice(4)))].slice(0,6);
+const refCache=new Map();
+const refUrl=id=>{ if(!refCache.has(id)) refCache.set(id,cap.db.collection('refs').doc(id).get().then(d=>{ const x=d.exists&&d.data(); if(!x||!x.data) return ''; const bin=atob(x.data), a=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return URL.createObjectURL(new Blob([a],{type:'image/jpeg'})); }).catch(()=>{ refCache.delete(id); return ''; })); return refCache.get(id); };
+function fillRefs(){ if(!cap.db) return; document.querySelectorAll('.refpic[data-ref]').forEach(a=>{ const id=a.dataset.ref; refUrl(id).then(u=>{ if(!a.isConnected) return; if(u){ a.href=u; a.innerHTML=`<img src="${u}" alt="Design photo from the customer">`; } else a.innerHTML='<span>This photo could not be opened</span>'; }); }); }
 const newOrder=()=>({no:((ORD||[]).reduce((m,o)=>Math.max(m,o.no||0),0))+1,createdAt:new Date().toISOString(),customer:'',phone:'',channel:'WhatsApp',status:'New',items:[],due:'',discount:0,advance:0,measurements:'',notes:''});
 const oTotal=o=>Math.max(0,(o.items||[]).reduce((s,i)=>s+(Number(i.price)||0),0)-(Number(o.discount)||0));
 const oBal=o=>Math.max(0,oTotal(o)-(Number(o.advance)||0));
@@ -571,6 +577,7 @@ function editPage(){
     ${pn('Customer',`<div class="fgrid">${fld('Customer name','customer')}${fld('Phone','phone',{ph:'919876543210',hint:'With country code, for WhatsApp updates.'})}${fld('Came from','channel',{opts:['WhatsApp','Instagram','Walk-in','Phone','Other']})}</div>`)}
     ${pn('Items',`<div class="oitems"><div class="oitem oh"><span>Design or garment</span><span>Size</span><span>Price (₹)</span><span></span></div>${o.items.map((it,i)=>`<div class="oitem"><input list="plist" data-oi="${i}:name" value="${esc(it.name)}" placeholder="Design or garment" aria-label="Item"><input data-oi="${i}:size" value="${esc(it.size)}" placeholder="Size" aria-label="Size"><input data-oi="${i}:price" value="${it.price||''}" inputmode="decimal" placeholder="0" aria-label="Price"><button class="mini" data-a="rm-item" data-v="${i}" aria-label="Remove item">✕</button></div>`).join('')}</div>
       <datalist id="plist">${DATA.products.map(p=>`<option value="${esc(p.name)}">`).join('')}</datalist><div><button class="mini" data-a="add-item">Add item</button></div>`)}
+    ${refIds(o).length?pn('Design photos from the customer',`<div class="refpics">${refIds(o).map(id=>`<a class="refpic" data-ref="${esc(id)}" target="_blank" rel="noopener"><span>Loading\u2026</span></a>`).join('')}</div>`,'Photos the customer added to show the design they like. Tap one to open it full size.'):''}
     ${pn('Measurements and notes',`<div class="fgrid">${fld('Measurements','measurements',{area:1})}${fld('Notes','notes',{area:1})}</div>`)}
     </div><div class="ecol eside">
     ${pn('Status',`<div class="fgrid">${fld('Stage','status',{opts:STATUS})}${fld('Needed by','due',{type:'date'})}</div>`)}
@@ -645,7 +652,8 @@ async function adminAct(a,v,el){
   else if(a==='site-photo-rm'){ SITE[v]=''; markDirty(); }
   else if(a==='del'){ if(el.dataset.sure!=='1'){ const l=el.textContent; el.dataset.sure='1'; el.textContent='Tap again to delete'; setTimeout(()=>{ if(el.isConnected){ el.dataset.sure=''; el.textContent=l; } },4000); return; }
     const k=aEdit.kind, o=aEdit.obj;
-    if(k==='order'){ try{ await cap.db.collection('orders').doc(o.id).delete(); toast('Order deleted.'); }catch(e){ return toast('The order could not be deleted.'); } }
+    if(k==='order'){ try{ await cap.db.collection('orders').doc(o.id).delete(); toast('Order deleted.'); }catch(e){ return toast('The order could not be deleted.'); }
+      refIds(o).forEach(id=>cap.db.collection('refs').doc(id).delete().catch(()=>{})); }
     else { if(k==='product') DATA.products.splice(DATA.products.indexOf(o),1);
       else if(k==='coll'){ DATA.collections.splice(DATA.collections.indexOf(o),1); DATA.products.forEach(p=>p.c=p.c.filter(c=>c!==o.id)); }
       else DATA.promos.splice(DATA.promos.indexOf(o),1); markDirty(); }
@@ -763,6 +771,15 @@ async function placeOrder(pay){
     <div class="btns"><button class="btn" id="ckDone">I have sent it</button><a class="btn ghost" href="#checkout">Change my details</a></div></div>`;
   window.scrollTo(0,0);
 }
+/* photos of a design the customer likes, attached to a custom order: made small on the phone, then sent with the order */
+const REF_MAX=3; let coPics=[];
+const blob64=b=>new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(String(r.result).split(',')[1]); r.onerror=rej; r.readAsDataURL(b); });
+async function refJpeg(file){ let b=null; for(const max of [1400,1000,720]){ b=await toJpeg(file,max); if(b.size<=690000) return b; } throw new Error('big'); }
+const coPicDraw=()=>{ const l=$('coPicList'); if(l) l.innerHTML=coPics.map((x,i)=>`<span class="copic"><img src="${x.url}" alt="Photo ${i+1}"><button type="button" class="mini" data-coprm="${i}" aria-label="Remove photo ${i+1}">\u2715</button></span>`).join(''); if($('coPics')) $('coPics').hidden=coPics.length>=REF_MAX; };
+document.addEventListener('change',async e=>{ if(e.target.id!=='coPics') return; const files=[...e.target.files]; e.target.value=''; let bad=0, over=0;
+  for(const f of files){ if(coPics.length>=REF_MAX){ over++; continue; } try{ const b=await refJpeg(f); coPics.push({b,url:URL.createObjectURL(b)}); }catch(err){ bad++; } }
+  coPicDraw(); if(bad) toast(bad===1?'One photo could not be read. Try a JPG or PNG, or a screenshot.':'Some photos could not be read. Try JPG or PNG files.'); else if(over) toast('You can add up to '+REF_MAX+' photos.'); });
+document.addEventListener('click',e=>{ const t=e.target.closest('[data-coprm]'); if(!t) return; const x=coPics.splice(+t.dataset.coprm,1)[0]; if(x) URL.revokeObjectURL(x.url); coPicDraw(); });
 document.addEventListener('submit',async e=>{
   if(e.target.id==='ckForm'){ e.preventDefault(); placeOrder(); return; }
   if(e.target.id!=='coForm') return;
@@ -783,15 +800,22 @@ document.addEventListener('submit',async e=>{
   if(m) add(`Measurements: ${m}`,1);
   if(val('coNotes')) add(`Notes: ${val('coNotes').replace(/\s*\n\s*/g,' ')}`,1);
   if(val('coPhone')) add(`Phone: ${val('coPhone')}`);
+  const nPics=coPics.length; if(nPics) lines.push(`Design photos: ${nPics} added on the website`);
   const msg=lines.join('\n'), box=(label,hint)=>`<div class="box"><div class="label">${label}</div><textarea id="coMsg" readonly>${esc(msg)}</textarea>${hint}${sendHTML('coMsg',msg)}</div>`;
-  let placed=false;
-  if(SB.on){ const go=e.target.querySelector('[type=submit]'); if(go.disabled) return; go.disabled=true; go.textContent='Sending your order…';
+  let placed=false, picLost=0;
+  if(SB.on){ const go=e.target.querySelector('[type=submit]'); if(go.disabled) return; go.disabled=true; go.textContent=nPics?'Sending your photos…':'Sending your order…';
+    /* photos go first; the order then carries their ids. If a photo cannot be saved the order still goes, with a line saying so. */
+    const ids=[]; for(const x of coPics){ try{ ids.push(await SB.addRef(await blob64(x.b))); }catch(err){} }
+    picLost=nPics-ids.length;
+    if(ids.length) extra.splice(1,0,'Design photos (keep this line): '+ids.map(i=>'ref:'+i).join(' '));
+    if(picLost) extra.splice(1,0,`The customer added ${picLost} design ${picLost===1?'photo':'photos'} that could not be saved. Ask for ${picLost===1?'it':'them'} on WhatsApp.`);
+    go.textContent='Sending your order…';
     const p=DATA.products.find(p=>p.name.toLowerCase()===val('coDesign').toLowerCase()), d=val('coDesign'), g=val('coType');
     try{ await SB.createOrder({createdAt:new Date().toISOString(),customer:val('coName').slice(0,80),phone:val('coPhone').replace(/[^\d+]/g,'').slice(0,20),channel:'Website',status:'New',
         items:[{pid:p?p.id:'',name:(d?d+' ('+g+', custom)':g+' (custom)').slice(0,120),size:visit?'Measure at studio':val('coSize'),price:0}],due:/^\d{4}-\d{2}-\d{2}$/.test(val('coDate'))?val('coDate'):'',discount:0,advance:0,measurements:'',notes:extra.join('\n').slice(0,1500)});
-      placed=true; alertOwner(val('coName'),[(d?d+', ':'')+g+' (custom order)'],visit?'Studio visit asked for: '+vTxt:''); }catch(err){} go.disabled=false; go.textContent='Send my custom order'; }
-  if(placed){ e.target.hidden=true;
-    $('coOut').innerHTML=`<div class="box"><span class="eyebrow">Thank you</span><h2 style="margin:0">Your custom order has reached Sreez</h2><p class="hint" style="margin:0">${visit?'She will confirm your studio visit on '+esc(vTxt)+' by calling or messaging '+esc(val('coPhone'))+'.':'She will contact you on '+esc(val('coPhone'))+' to confirm the design, price and date.'}</p></div>`+box('Your order','<p class="hint" style="margin:0">Want a quicker reply? You can also send this to Sreez yourself.</p>'); }
+      placed=true; alertOwner(val('coName'),[(d?d+', ':'')+g+' (custom order)'],[visit?'Studio visit asked for: '+vTxt:'',ids.length?ids.length+(ids.length===1?' design photo':' design photos')+' attached. Open the order to see.':''].filter(Boolean).join('\n')); }catch(err){} go.disabled=false; go.textContent='Send my custom order'; }
+  if(placed){ e.target.hidden=true; coPics.forEach(x=>URL.revokeObjectURL(x.url)); coPics=[];
+    $('coOut').innerHTML=`<div class="box"><span class="eyebrow">Thank you</span><h2 style="margin:0">Your custom order has reached Sreez</h2><p class="hint" style="margin:0">${visit?'She will confirm your studio visit on '+esc(vTxt)+' by calling or messaging '+esc(val('coPhone'))+'.':'She will contact you on '+esc(val('coPhone'))+' to confirm the design, price and date.'}</p>${nPics&&!picLost?`<p class="hint" style="margin:0">Your ${nPics===1?'photo has':nPics+' photos have'} reached her too.</p>`:''}${picLost?`<p class="hint" style="margin:0"><b>${picLost===1?'One photo':picLost+' photos'} could not be sent.</b> Please send ${picLost===1?'it':'them'} to Sreez on WhatsApp or Instagram.</p>`:''}</div>`+box('Your order','<p class="hint" style="margin:0">Want a quicker reply? You can also send this to Sreez yourself.</p>'); }
   else $('coOut').innerHTML=box('Your message','');
   $('coOut').scrollIntoView({block:'nearest'});
 });

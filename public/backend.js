@@ -14,6 +14,10 @@
   SB.createOrder=async o=>{ if(!on) throw new Error('off');
     const r=await fetch(base()+'orders?key='+encodeURIComponent(C.apiKey),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:enc(o).mapValue.fields})});
     if(!r.ok) throw new Error('order '+r.status); return (await r.json()).name.split('/').pop(); };
+  /* a photo of a design the customer likes, sent with a custom order. Customers can only add one; only the owner can open it. */
+  SB.addRef=async data=>{ if(!on) throw new Error('off');
+    const r=await fetch(base()+'refs?key='+encodeURIComponent(C.apiKey),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fields:enc({data,createdAt:new Date().toISOString()}).mapValue.fields})});
+    if(!r.ok) throw new Error('ref '+r.status); return (await r.json()).name.split('/').pop(); };
   /* order alert: emails the owner through Web3Forms when an order is placed. The key is a public form key (it can only send mail to its owner's inbox).
      Never blocks or fails the order; the message leaves out the phone and address, which stay in the manager. */
   SB.notify=(key,subject,text)=>{ if(!key) return Promise.resolve(false);

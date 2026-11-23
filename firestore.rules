@@ -27,6 +27,14 @@ service cloud.firestore {
       allow read, update, delete: if owner();
     }
 
+    // Design photos a customer adds to a custom order: anyone can add one small photo, only the owner can see or delete it.
+    match /refs/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['data','createdAt'])
+        && request.resource.data.data is string && request.resource.data.data.size() > 0 && request.resource.data.data.size() <= 950000
+        && request.resource.data.createdAt is string && request.resource.data.createdAt.size() <= 40;
+      allow read, delete: if owner();
+    }
+
     function validOrder(o) {
       return o.keys().hasOnly(['createdAt','customer','phone','channel','status','items','due','discount','advance','measurements','notes'])
         && o.keys().hasAll(['createdAt','customer','phone','channel','status','items'])

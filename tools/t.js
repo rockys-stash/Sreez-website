@@ -1,8 +1,8 @@
 const {chromium}=require('playwright');
 const FAKE=`window.firebase=(function(){
- const st=window.__st=window.__st||{user:JSON.parse(localStorage.getItem('fu')||'null'),docs:{'orders/w1':{createdAt:'2026-11-18T10:00:00Z',customer:'Web Cust',phone:'9876543210',channel:'Website',status:'New',items:[{pid:'p1',name:'X',size:'M',price:1200}],due:'',discount:0,advance:0,measurements:'',notes:'Delivery: Collect'}},subs:[]};
+ const st=window.__st=window.__st||{user:JSON.parse(localStorage.getItem('fu')||'null'),docs:{'orders/w1':{createdAt:'2026-11-18T10:00:00Z',customer:'Web Cust',phone:'9876543210',channel:'Website',status:'New',items:[{pid:'p1',name:'X',size:'M',price:1200}],due:'',discount:0,advance:0,measurements:'',notes:'Garment: Blouse; Design photos (keep this line): ref:abc12345 ref:gone9999'},'refs/abc12345':{data:'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',createdAt:'x'}},subs:[]};
  const fire=()=>st.subs.forEach(f=>f());
- const col=c=>({ doc(id){ id=id||('n'+Math.random().toString(36).slice(2,8)); const k=c+'/'+id; return {id,set(d,o){ if(!st.user||st.user.email!=='owner@x.com') return Promise.reject({code:'permission-denied'}); st.docs[k]=o&&o.merge?Object.assign({},st.docs[k],d):d; fire(); return Promise.resolve(); },delete(){ delete st.docs[k]; fire(); return Promise.resolve(); }}; },
+ const col=c=>({ doc(id){ id=id||('n'+Math.random().toString(36).slice(2,8)); const k=c+'/'+id; return {id,set(d,o){ if(!st.user||st.user.email!=='owner@x.com') return Promise.reject({code:'permission-denied'}); st.docs[k]=o&&o.merge?Object.assign({},st.docs[k],d):d; fire(); return Promise.resolve(); },get(){ return st.user&&st.user.email==='owner@x.com'?Promise.resolve({exists:k in st.docs,data:()=>st.docs[k]}):Promise.reject({code:'permission-denied'}); },delete(){ delete st.docs[k]; fire(); return Promise.resolve(); }}; },
    limit(){ return {get(){ return st.user&&st.user.email==='owner@x.com'?Promise.resolve({docs:[]}):Promise.reject({code:'permission-denied'}); }}; },
    onSnapshot(ok,err){ const f=()=>ok({docs:Object.keys(st.docs).filter(k=>k.startsWith(c+'/')).map(k=>({id:k.split('/')[1],data:()=>st.docs[k]}))}); st.subs.push(f); setTimeout(f,10); } });
  const mk=u=>Object.assign(u,{sendEmailVerification(){ window.__sent=(window.__sent||0)+1; return Promise.resolve(); },reload(){ if(window.__clicked){ this.emailVerified=true; localStorage.setItem('fv','1'); localStorage.setItem('fu',JSON.stringify(this)); } return Promise.resolve(); },getIdToken(){ return Promise.resolve('t'); }}); if(st.user) mk(st.user);
@@ -65,6 +65,11 @@ const FAKE=`window.firebase=(function(){
     ok(await pg.locator('.mg').count()===1,w+' manager opens for owner');
     ok(/Web Cust/.test(await pg.textContent('#view')),w+' website order listed');
     ok(await pg.evaluate(()=>window.__st.docs['orders/w1'].no)===1,w+' order numbered');
+    await pg.click('.trow[data-v="order:w1"]'); await pg.waitForTimeout(500);
+    ok(await pg.locator('.refpic').count()===2&&await pg.locator('.refpic img').count()===1&&/^blob:/.test(await pg.getAttribute('.refpic[data-ref="abc12345"]','href')),w+' customer design photo shown on the order');
+    ok(/could not be opened/.test(await pg.textContent('.refpic[data-ref="gone9999"]')),w+' missing photo says so');
+    if(process.env.SHOT) await pg.screenshot({path:process.env.SHOT+'/ref-order'+w+'.png',fullPage:true});
+    await pg.click('[data-a="back"]'); await pg.waitForTimeout(200);
     for(const t of ['products','collections','promos','shop','insights','orders']){ await pg.click(`.mgtab[data-v="${t}"]`); await pg.waitForTimeout(150); }
     await pg.click('.mgtab[data-v="promos"]'); await pg.waitForTimeout(200);
     ok(await pg.locator('.t-off .trow').count()===6&&/SREENEW/.test(await pg.textContent('#view')),w+' six starter promo codes listed');

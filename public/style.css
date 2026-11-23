@@ -541,3 +541,12 @@ select.tin{max-width:44vw}
 .perr{color:#b3261e}.perr:empty{display:none}
 .promoon{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;background:var(--blush);border:1px dashed var(--accent);border-radius:var(--radius);padding:10px 12px;font-size:14px}
 .promoon b{letter-spacing:.06em}.promoon span{flex:1 1 160px;color:var(--muted)}
+
+/* design photos on a custom order */
+.copics{display:flex;flex-wrap:wrap;gap:10px}.copics:empty{display:none}
+.copic{position:relative;width:96px;height:120px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--blush)}
+.copic img{width:100%;height:100%;object-fit:cover;display:block}
+.copic .mini{position:absolute;top:4px;right:4px;min-width:28px;min-height:28px;padding:0;background:#fff}
+.refpics{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+.refpic{display:grid;place-items:center;aspect-ratio:3/4;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:var(--blush);font-size:13px;color:var(--muted);text-align:center;padding:0;text-decoration:none}
+.refpic img{width:100%;height:100%;object-fit:cover;display:block}.refpic span{padding:8px}
