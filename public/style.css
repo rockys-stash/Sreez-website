@@ -231,7 +231,7 @@ footer ul{list-style:none;margin:0;padding:0;display:grid;gap:6px;color:var(--mu
 footer a{text-decoration:none}
 .legal{color:var(--muted);font-size:12px;margin-top:10px}
 
-.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding-bottom:env(safe-area-inset-bottom)}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(4,1fr);padding-bottom:env(safe-area-inset-bottom)}
 .tabbar a,.tabbar button{height:60px;display:grid;place-items:center;align-content:center;gap:2px;font-size:11px;font-weight:500;text-decoration:none;position:relative;color:var(--muted)}
 .tabbar a[aria-current="page"]{color:var(--accent)}
 .tabbar svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
@@ -528,3 +528,16 @@ select.tin{max-width:44vw}
 .tiprow{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:center}
 .tiprow input{width:100%;min-width:0;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);color:var(--ink);font:inherit;font-size:13.5px;padding:0 10px}
 .tipno{font-size:13px;color:var(--muted);text-align:center}
+
+/* promo codes */
+.pcode{font:inherit;color:inherit;text-align:left;cursor:pointer}
+.pcode b{letter-spacing:.06em}
+.pcode .puse{font-size:12px;font-weight:700;color:var(--accent)}
+.promo .plabel{font-size:13px;font-weight:600}
+.promorow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px}
+.promorow input{text-transform:uppercase;letter-spacing:.06em}
+.promorow input::placeholder{text-transform:none;letter-spacing:0}
+.promorow .btn{min-height:0;padding:0 18px}
+.perr{color:#b3261e}.perr:empty{display:none}
+.promoon{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;background:var(--blush);border:1px dashed var(--accent);border-radius:var(--radius);padding:10px 12px;font-size:14px}
+.promoon b{letter-spacing:.06em}.promoon span{flex:1 1 160px;color:var(--muted)}

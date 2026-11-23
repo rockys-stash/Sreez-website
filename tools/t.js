@@ -65,7 +65,16 @@ const FAKE=`window.firebase=(function(){
     ok(await pg.locator('.mg').count()===1,w+' manager opens for owner');
     ok(/Web Cust/.test(await pg.textContent('#view')),w+' website order listed');
     ok(await pg.evaluate(()=>window.__st.docs['orders/w1'].no)===1,w+' order numbered');
-    for(const t of ['products','collections','offers','shop','insights','orders']){ await pg.click(`.mgtab[data-v="${t}"]`); await pg.waitForTimeout(150); }
+    for(const t of ['products','collections','promos','shop','insights','orders']){ await pg.click(`.mgtab[data-v="${t}"]`); await pg.waitForTimeout(150); }
+    await pg.click('.mgtab[data-v="promos"]'); await pg.waitForTimeout(200);
+    ok(await pg.locator('.t-off .trow').count()===6&&/SREENEW/.test(await pg.textContent('#view')),w+' six starter promo codes listed');
+    await pg.click('[data-a="new-promo"]'); await pg.waitForTimeout(200);
+    await pg.fill('[data-k="code"]','diwali 20!'); await pg.fill('[data-k="value"]','20'); await pg.check('[data-k="show"]');
+    ok(await pg.evaluate(()=>{ const p=DATA.promos[DATA.promos.length-1]; return p.code==='DIWALI20'&&p.value===20&&p.show===true&&promoCheck('diwali20',1000,0).off===200; }),w+' new promo code saved and working');
+    ok(await pg.evaluate(()=>document.documentElement.scrollWidth-innerWidth)<=1,w+' promo edit no overflow');
+    if(process.env.SHOT) await pg.screenshot({path:process.env.SHOT+'/promo-edit'+w+'.png',fullPage:true});
+    await pg.click('[data-a="back"]'); await pg.waitForTimeout(200);
+    if(process.env.SHOT) await pg.screenshot({path:process.env.SHOT+'/promo-list'+w+'.png',fullPage:true});
     await pg.click('.mgtab[data-v="shop"]'); await pg.waitForTimeout(200);
     await pg.uncheck('[data-k="tipsOn"]'); ok(await pg.evaluate(()=>SITE.tipsOn)===false,w+' tips switch off'); await pg.check('[data-k="tipsOn"]'); ok(await pg.evaluate(()=>SITE.tipsOn)===true,w+' tips switch on');
     await pg.fill('#tipNew','hello'); await pg.click('[data-a="tip-add"]'); await pg.waitForTimeout(150);

@@ -3,8 +3,12 @@
    and the owner's published version is read from Firebase (see backend.js). The manager edits that catalogue and saves it there. */
 try{ if(sessionStorage.getItem('sreezIntro')) document.documentElement.classList.add('no-intro'); else sessionStorage.setItem('sreezIntro','1'); }catch(e){}
 const DATA=JSON.parse(document.getElementById('data').textContent);
+/* promo codes replaced the old offers: a catalogue saved before that gets the starter codes, and the offers are dropped */
+const SEED_PROMOS=JSON.stringify(DATA.promos||[]);
+const normCat=x=>{ if(!Array.isArray(x.promos)) x.promos=JSON.parse(SEED_PROMOS); delete x.offers; if(x.site){ delete x.site.offerTerms; delete x.site.offerBanner; } return x; };
 /* show the last published catalogue this device saw, so the page opens with current prices straight away */
 try{ const c=SB.on&&JSON.parse(localStorage.getItem('sreezCat')); if(c&&c.products&&c.site) Object.assign(DATA,c); }catch(e){}
+normCat(DATA);
 document.getElementById('shell').before(document.getElementById('shell').content.cloneNode(true));
 
 const STD=['XS','S','M','L','XL','XXL','Custom measurements'], CUSTOM=['Custom measurements'];
@@ -34,7 +38,20 @@ const inColl=c=>P().filter(p=>p.c.includes(c.id));
 const COLL=()=>DATA.collections.filter(c=>!c.hidden&&(HINTS||c.cover||inColl(c).length));
 const coll=id=>DATA.collections.find(c=>c.id===id&&!c.hidden), prod=id=>P().find(p=>p.id===id);
 const pcoll=p=>p.c.map(coll).find(Boolean);
-const OFFERS=()=>DATA.offers.filter(o=>o.active!==false);
+/* promo codes: one code per order, typed at checkout or on the custom order form */
+const promoCode=s=>String(s||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,20);
+const promoTxt=p=>p.type==='flat'?inr(p.value)+' off':(Number(p.value)||0)+'% off';
+const promoEnded=p=>!!p.until&&p.until<addDays(0);
+const promoLive=p=>p.active!==false&&!!promoCode(p.code)&&Number(p.value)>0&&!promoEnded(p);
+const PROMOS=()=>DATA.promos.filter(p=>promoLive(p)&&p.show);
+/* check a typed code against an order total; open = some items have no price yet, so the amount is worked out later */
+const promoCheck=(c,total,open)=>{ c=promoCode(c); const p=c&&DATA.promos.find(p=>promoCode(p.code)===c);
+  if(!p||p.active===false||!(Number(p.value)>0)) return {err:'That code is not valid. Check the spelling.'};
+  if(promoEnded(p)) return {err:'The code '+c+' has ended.'};
+  const min=Number(p.min)||0; if(min&&total&&!open&&total<min) return {err:c+' works on orders of '+inr(min)+' or more.'};
+  return {p,code:c,min,off:total&&!open?Math.min(total,p.type==='flat'?Math.round(Number(p.value)):Math.round(total*Math.min(100,Number(p.value))/100)):0}; };
+let promo=''; try{ promo=promoCode(sessionStorage.getItem('sreezPromo')); }catch(e){}
+const setPromo=c=>{ promo=promoCode(c); try{ promo?sessionStorage.setItem('sreezPromo',promo):sessionStorage.removeItem('sreezPromo'); }catch(e){} };
 /* styling tips: Instagram posts and reels the owner picked, shown with Instagram's own embed player */
 const tipList=()=>(Array.isArray(SITE.tips)?SITE.tips:[]).map(u=>{ const m=String(u).match(/instagram\.com\/(?:[\w.]+\/)?(p|reel|reels|tv)\/([\w-]+)/i); return m?{kind:m[1].toLowerCase()==='p'?'p':'reel',code:m[2]}:null; }).filter(Boolean).slice(0,12);
 const tipsHTML=()=>{ if(SITE.tipsOn===false) return ''; const t=tipList(); if(!t.length) return HINTS?`<section><div class="head"><h2>Styling tips</h2></div><p class="lede">${todo('to add')} Paste links to your Instagram posts in Manage shop, Shop details, Styling tips.</p></section>`:'';
@@ -87,7 +104,7 @@ const stepsHTML=`<ol class="steps">
   <li><b>Send your measurements</b><span>Choose a standard size or share your own measurements for a made-to-measure fit.</span></li>
   <li><b>Cutting and stitching</b><span>The pattern is drafted for you and the piece is stitched from scratch.</span></li>
   <li><b>Fitting and delivery</b><span>Final adjustments are made before the piece is handed over or shipped.</span></li></ol>`;
-const offerMeta=o=>`${o.discount?`<dt>Discount</dt><dd>${esc(o.discount)}</dd>`:(HINTS?`<dt>Discount</dt><dd>${todo('to add')}</dd>`:'')}${o.validUntil?`<dt>Valid until</dt><dd>${fmtDate(o.validUntil)}</dd>`:(HINTS?`<dt>Valid until</dt><dd>${todo('to add')}</dd>`:'')}`;
+
 
 const AV=()=>SITE.avatar||SITE.portrait, avImg=()=>AV()?`<img src="${esc(imgSrc(AV()))}" alt="Sreeja Balagan" loading="lazy">`:'';
 const firstPara=t=>String(t||'').split(/\n\s*\n/).map(x=>x.trim()).filter(Boolean);
@@ -98,7 +115,7 @@ home(){
   const hc=cs.filter(c=>c.cover||inColl(c).some(p=>p.imgs.length)), hr=hc.length?(()=>{let r=heroStart%hc.length; if(hc.length>1&&r===heroLast) r=(r+1+Math.floor(Math.random()*(hc.length-1)))%hc.length; try{sessionStorage.setItem('sreezHeroLast',r);localStorage.setItem('sreezHeroLast',r);}catch(e){} heroLast=r; return r;})():0;
   const slides=hc.slice(hr).concat(hc.slice(0,hr)).map((c,k)=>`<a class="slide hero" href="#c-${c.id}">${cover(c,'3/4',k?2:1)}
     <div class="copy"><h2 class="ht">${esc(c.name)}</h2><p>${esc(c.blurb)}</p><div class="btns"><span class="btn">Shop now</span></div></div></a>`);
-  const bridal=cs.filter(c=>c.group==='bridal'), more=cs.filter(c=>c.group==='more'), all=P(), fresh=all.slice(0,4), trend=all.filter(p=>p.trend&&!fresh.includes(p)).slice(0,8), offers=OFFERS();
+  const bridal=cs.filter(c=>c.group==='bridal'), more=cs.filter(c=>c.group==='more'), all=P(), fresh=all.slice(0,4), trend=all.filter(p=>p.trend&&!fresh.includes(p)).slice(0,8), promos=PROMOS();
   const detail=P().filter(p=>p.c.includes('blouses')).map(p=>p.imgs[1]||p.imgs[0]).filter(Boolean).slice(0,6);
   if(!cs.some(c=>c.id===homeTab)) homeTab=(cs[0]||{}).id||'';
   return `
@@ -106,8 +123,8 @@ home(){
   ${cs.length?`<section><div class="chips tabs" id="homeTabs">${cs.map(c=>`<button class="chip" data-tab="${c.id}">${esc(c.name)}</button>`).join('')}</div>
     <div class="prow" id="homeGrid"></div>
     <p class="more"><a class="btn ghost" id="homeAll" href="#shop">View all</a></p></section>`:''}
-  ${offers.length?`<section><div class="head"><h2>Offers</h2><a href="#offers">All offers</a></div>
-    <div class="prow">${offers.map(o=>`<a class="ocard" href="#offers"><span class="otag">${esc(o.tag)}</span><b>${esc(o.title)}</b><span>${esc(o.discount||o.desc)}</span></a>`).join('')}</div></section>`:''}
+  ${promos.length?`<section><div class="head"><h2>Promo codes</h2></div>
+    <div class="prow">${promos.map(p=>`<button class="ocard pcode" type="button" data-promo="${esc(promoCode(p.code))}"><span class="otag">${esc(promoTxt(p))}${Number(p.min)?' above '+inr(p.min):''}</span><b>${esc(promoCode(p.code))}</b><span>${esc(p.note||'Use this code when you order')}${p.until?' · until '+fmtDate(p.until):''}</span><span class="puse">Tap to use this code</span></button>`).join('')}</div></section>`:''}
   ${bridal.length?`<section><div class="head"><h2>The bridal edit</h2><a href="#collections">All collections</a></div>
     <div class="tiles">${bridal.map(tile).join('')}</div></section>`:''}
   ${trend.length?`<section><div class="head"><h2>Trending picks</h2><a href="#shop">View all</a></div>
@@ -174,7 +191,7 @@ product(id){
   </div>
   ${more.length?`<section><div class="head"><h2>You may also like</h2></div><div class="grid">${more.map(card).join('')}</div></section>`:''}`},
 
-'custom-order'(){const d=draft; draft={}; const offers=OFFERS(); return `
+'custom-order'(){const d=draft; draft={}; return `
   <div class="crumbs"><a href="#home">Home</a><span>/</span><span>Custom order</span></div>
   <div class="pagehead"><span class="eyebrow">Made to measure</span><h1>Start a custom order</h1><p class="lede">Pick a design from the shop as a starting point, or bring your own idea and fabric.</p></div>
   ${stepsHTML}
@@ -190,7 +207,7 @@ product(id){
       <div class="field"><label for="coDate">Needed by</label><input id="coDate" type="date"></div>
     </div>
     <div class="field"><label for="coDesign">Starting design</label><input id="coDesign" value="${esc(d.design||'')}" placeholder="A design from this site, or leave blank"></div>
-    ${offers.length?`<div class="field"><label for="coOffer">Offer</label><select id="coOffer"><option value="">No offer</option>${offers.map(o=>`<option${d.offer===o.title?' selected':''}>${esc(o.title)}</option>`).join('')}</select></div>`:''}
+    <div class="field"><label for="coPromo">Promo code (optional)</label><input id="coPromo" value="${esc(promo)}" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter code" style="text-transform:uppercase"></div>
     <div class="field"><label for="coOcc">Occasion</label><input id="coOcc" placeholder="Wedding, birthday, daily wear"></div>
     <label class="check covisit"><input type="checkbox" id="coVisit"> I will visit the studio for measurements</label>
     <div id="coVisitBox" class="box" hidden><div class="row">
@@ -208,15 +225,6 @@ product(id){
     <button class="btn block" type="submit">${SB.on?'Send my custom order':'Create my message'}</button>
   </form>
   <div id="coOut" style="margin-top:16px"></div></section>`},
-
-offers(){const offers=OFFERS(); return `
-  <div class="crumbs"><a href="#home">Home</a><span>/</span><span>Offers</span></div>
-  <div class="pagehead"><h1>Offers</h1><p class="lede">${offers.length?'Current offers on custom orders. Mention the offer when you send your enquiry.':'There are no offers running right now. Follow Sreez on Instagram to hear about the next one.'}</p></div>
-  ${SITE.offerBanner?`<img src="${esc(imgSrc(SITE.offerBanner))}" alt="" style="width:100%;border-radius:var(--radius);margin-bottom:16px">`:(HINTS?`<div class="ph" style="aspect-ratio:16/9;margin-bottom:16px"><span><b>Banner placeholder</b>Add an offer banner in Manage shop</span></div>`:'')}
-  <div class="cards">${offers.map(o=>`<div class="box offer"><span class="otag">${esc(o.tag)}</span><b>${esc(o.title)}</b><span class="hint" style="font-size:14px">${esc(o.desc)}</span>
-    <dl>${offerMeta(o)}</dl>
-    <button class="btn ghost" data-offer="${esc(o.title)}">Use this offer</button></div>`).join('')}</div>
-  ${SITE.offerTerms?`<p class="hint" style="margin-top:16px">${nl(SITE.offerTerms)}</p>`:(HINTS?`<p class="hint" style="margin-top:16px">Offer terms ${todo('to add')}</p>`:'')}`},
 
 about(){ const paras=t=>String(t||'').split(/\n\s*\n/).filter(x=>x.trim()).map(x=>`<p>${nl(x.trim())}</p>`).join(''), sp=SITE.specialities||[]; return `
   <div class="crumbs"><a href="#home">Home</a><span>/</span><span>About</span></div>
@@ -274,12 +282,13 @@ checkout(){
       ${L?`<p class="hint" style="margin-top:-6px">Earliest ready date is about ${fmtDate(addDays(L))}. Leave the date empty if you are not in a hurry.</p>`:''}
       <div class="field"><label for="ckAddr">Delivery address</label><textarea id="ckAddr" autocomplete="street-address" placeholder="Only needed for delivery" style="min-height:80px"></textarea></div>
       <div class="field"><label for="ckNotes">Notes for Sreez</label><textarea id="ckNotes" placeholder="Colour or fabric changes, occasion, anything else" style="min-height:80px"></textarea></div>
+      <div class="field promo" id="promoBox">${promoHTML()}</div>
       <button class="btn block" type="submit">Place order</button>
       <p class="hint">Nothing is charged on this site. ${SITE.payment?nl(SITE.payment):'Sreez shares the final price and the advance to pay when she confirms your order.'}</p>
     </form>
     <aside class="box cksum"><div class="label">Your order</div>
       <div>${bag.map(b=>{ const p=prod(b.id); return `<div class="ckline">${p.imgs[0]?`<img ${tSrc(p.imgs[0])} alt="">`:'<span></span>'}<div><b>${esc(p.name)}</b><span>${esc(b.size)}${lead(p)?' · about '+dayTxt(lead(p)):''}</span></div><span class="num">${effPrice(p)?inr(effPrice(p)):'On request'}</span></div>`; }).join('')}</div>
-      <dl class="sums"><dt>${n} ${n===1?'design':'designs'}</dt><dd></dd>${L?`<dt>Stitching time</dt><dd>About ${dayTxt(L)}</dd><dt>Earliest ready date</dt><dd>${fmtDate(addDays(L))}</dd>`:''}<dt class="big">Estimated total</dt><dd class="big">${totTxt()}</dd></dl>
+      <dl class="sums" id="ckSums">${sumsHTML()}</dl>
       <a class="hint" href="#shop">Add another design</a>
     </aside>
   </div>`},
@@ -361,6 +370,26 @@ const bagMsg=()=>(bagName?`Hi Sreez, this is ${bagName}. `:'Hi Sreez, ')+'I woul
 const bagTotal=()=>{ let t=0, open=0; bag.forEach(b=>{ const v=effPrice(prod(b.id)); if(v) t+=v; else open++; }); return {t,open}; };
 const bagLead=()=>Math.max(0,...bag.map(b=>lead(prod(b.id))));
 const totTxt=()=>{ const x=bagTotal(); return (x.t?inr(x.t):'')+(x.open?(x.t?' + ':'')+'price on request':''); };
+/* the promo code applied to the cart, checked again each time because the cart may have changed */
+const bagPromo=()=>{ if(!promo) return null; const x=bagTotal(), r=promoCheck(promo,x.t,x.open); return r.err?null:r; };
+const bagNet=()=>{ const r=bagPromo(); return bagTotal().t-(r?r.off:0); };
+const netTxt=()=>{ const x=bagTotal(), r=bagPromo(); return r&&r.off?inr(x.t-r.off):totTxt(); };
+const promoLine=()=>{ const r=bagPromo(); return r?`Promo code: ${r.code} (${promoTxt(r.p)}${r.off?', saves '+inr(r.off):', to apply on the final price'})`:''; };
+const promoHTML=()=>{ const x=bagTotal(), r=promo?promoCheck(promo,x.t,x.open):null;
+  if(r&&!r.err) return `<span class="plabel">Promo code</span><div class="promoon"><b>${esc(r.code)}</b><span>${esc(promoTxt(r.p))}${r.off?', you save '+inr(r.off):'. Sreez takes it off when she confirms your price'}${!r.off&&r.min?' (orders of '+inr(r.min)+' or more)':''}</span><button class="mini" type="button" id="promoRm">Remove</button></div>`;
+  return `<label for="promoIn">Promo code</label><div class="promorow"><input id="promoIn" value="${esc(promo)}" maxlength="20" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Enter code"><button class="btn ghost" type="button" id="promoGo">Apply</button></div><span class="hint perr" id="promoMsg" role="status">${r?esc(r.err):''}</span>`; };
+const sumsHTML=()=>{ const L=bagLead(), n=bag.length, x=bagTotal(), r=bagPromo();
+  return `<dt>${n} ${n===1?'design':'designs'}</dt><dd>${r&&r.off?inr(x.t):''}</dd>${r?`<dt>Promo ${esc(r.code)}</dt><dd>${r.off?'\u2212 '+inr(r.off):esc(promoTxt(r.p))}</dd>`:''}${L?`<dt>Stitching time</dt><dd>About ${dayTxt(L)}</dd><dt>Earliest ready date</dt><dd>${fmtDate(addDays(L))}</dd>`:''}<dt class="big">Estimated total</dt><dd class="big">${netTxt()}</dd>`; };
+/* apply or remove a code on the checkout page without losing what was typed in the form; returns false when the code is refused */
+const promoApply=c=>{ const x=bagTotal(), r=promoCheck(c,x.t,x.open);
+  if(r.err){ const m=$('promoMsg'); if(m) m.textContent=r.err; return false; }
+  setPromo(r.code); promoDraw(); return true; };
+const promoDraw=()=>{ if($('promoBox')) $('promoBox').innerHTML=promoHTML(); if($('ckSums')) $('ckSums').innerHTML=sumsHTML(); };
+document.addEventListener('click',e=>{ const t=e.target.closest('#promoGo,#promoRm'); if(!t) return;
+  if(t.id==='promoRm'){ setPromo(''); promoDraw(); if($('promoIn')) $('promoIn').focus(); }
+  else if(!promoCode($('promoIn').value)){ $('promoMsg').textContent='Type your code first.'; $('promoIn').focus(); }
+  else if(promoApply($('promoIn').value)) toast(promo+' applied.'); });
+document.addEventListener('keydown',e=>{ if(e.key==='Enter'&&e.target.id==='promoIn'){ e.preventDefault(); $('promoGo').click(); } });
 function renderBag(){
   bag=bag.filter(b=>prod(b.id)); const n=bag.length;
   [$('bagCount'),$('bagCount2')].forEach(e=>{ e.textContent=n; e.hidden=!n; });
@@ -379,7 +408,7 @@ function copyFrom(btn){
 function chrome(){
   $('announce').textContent=SITE.announce||''; $('announce').hidden=!SITE.announce;
   const cs=COLL();
-  $('menuBody').innerHTML='<a href="#home">Home</a><a href="#shop">Shop all</a>'+cs.map(c=>`<a class="sub" href="#c-${c.id}">${esc(c.name)}</a>`).join('')+'<a href="#offers">Offers</a><a href="#custom-order">Custom order</a><a href="#about">About</a><a href="#contact">Contact</a><a href="#help">Help</a>'+(isAdmin?'<a href="#manage">Manage shop</a>':'');
+  $('menuBody').innerHTML='<a href="#home">Home</a><a href="#shop">Shop all</a>'+cs.map(c=>`<a class="sub" href="#c-${c.id}">${esc(c.name)}</a>`).join('')+'<a href="#custom-order">Custom order</a><a href="#about">About</a><a href="#contact">Contact</a><a href="#help">Help</a>'+(isAdmin?'<a href="#manage">Manage shop</a>':'');
   $('footColl').innerHTML='<li><a href="#collections">All collections</a></li>'+cs.slice(0,6).map(c=>`<li><a href="#c-${c.id}">${esc(c.name)}</a></li>`).join('');
   $('footVisit').innerHTML=[SITE.address?esc(SITE.address):(HINTS?'Studio address '+todo('to add'):''),SITE.hours?esc(SITE.hours):(HINTS?'Opening hours '+todo('to add'):''),SITE.wa?'WhatsApp '+esc(SITE.waShow||'+'+SITE.wa):''].filter(Boolean).map(x=>`<li>${x}</li>`).join('');
   $('footIg').href=igUrl();
@@ -429,7 +458,7 @@ function parseEnquiry(t){
   let garment='', design='', size='';
   t.split('\n').forEach(l=>{ let x;
     if((x=l.match(/^\s*\d+\.\s*(.+?)\s*\(([^)]+)\)\s*(?:[-\u2013]\s*\D*([\d,]+))?\s*$/))){ const p=DATA.products.find(p=>p.name.toLowerCase()===x[1].toLowerCase()); o.items.push({pid:p?p.id:'',name:p?p.name:x[1],size:x[2],price:x[3]?Number(x[3].replace(/,/g,'')):(p?(p.offerPrice||p.price||0):0)}); }
-    else if((x=l.match(/^\s*(Garment|Starting design|Offer|Occasion|Needed by|Size|Measurements|Notes|Phone|Delivery|Address):\s*(.+)$/i))){ const k=x[1].toLowerCase(), v=x[2].trim();
+    else if((x=l.match(/^\s*(Garment|Starting design|Offer|Promo code|Occasion|Needed by|Size|Measurements|Notes|Phone|Delivery|Address):\s*(.+)$/i))){ const k=x[1].toLowerCase(), v=x[2].trim();
       if(k==='garment') garment=v; else if(k==='starting design') design=v; else if(k==='size') size=v; else if(k==='measurements') o.measurements=v; else if(k==='phone') o.phone=v.replace(/\D/g,'');
       else if(k==='needed by'){ if(/^\d{4}-\d{2}-\d{2}$/.test(v)) o.due=v; else extra.push('Needed by: '+v); } else extra.push(x[1]+': '+v); } });
   if(!o.items.length&&(garment||design)){ const p=DATA.products.find(p=>p.name.toLowerCase()===design.toLowerCase()); o.items.push({pid:p?p.id:'',name:design?design+(garment?' ('+garment+', custom)':''):garment+' (custom)',size:size,price:p?(p.offerPrice||p.price||0):0}); }
@@ -443,8 +472,8 @@ const chk=(label,k)=>`<label class="check"><input type="checkbox" data-k="${k}" 
 const thumb=im=>im?`<img class="tth" ${tSrc(im)} alt="" loading="lazy">`:'<span class="tth"></span>';
 const mv=(kind,i,n)=>`<span class="mvs"><button class="mini" data-a="move" data-v="${kind}:${i}:-1"${i===0?' disabled':''} aria-label="Move up">↑</button><button class="mini" data-a="move" data-v="${kind}:${i}:1"${i===n-1?' disabled':''} aria-label="Move down">↓</button></span>`;
 /* the manager is its own app view: section menu (side on desktop, bottom on phone), a title bar with the main actions, then panels and tables */
-const TABS=[['orders','Orders','Orders'],['products','Designs','Designs'],['collections','Collections','Collections'],['offers','Offers','Offers'],['shop','Shop details','Shop'],['insights','Insights','Insights']];
-const ICON={orders:'M9 4h6v3H9zM9 5H6v15h12V5h-3M9 11h6M9 15h6',products:'M9 4L4 7l2 4 2-1v10h8V10l2 1 2-4-5-3a3 3 0 0 1-6 0z',collections:'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',offers:'M4 12.5V5h7.5l8.5 8.5-7.5 7.5zM8.5 9.4v.2',shop:'M4 9l1-5h14l1 5M5 9v11h14V9M10 20v-6h4v6',insights:'M5 20v-9M12 20V4M19 20v-6'};
+const TABS=[['orders','Orders','Orders'],['products','Designs','Designs'],['collections','Collections','Collections'],['promos','Promo codes','Codes'],['shop','Shop details','Shop'],['insights','Insights','Insights']];
+const ICON={orders:'M9 4h6v3H9zM9 5H6v15h12V5h-3M9 11h6M9 15h6',products:'M9 4L4 7l2 4 2-1v10h8V10l2 1 2-4-5-3a3 3 0 0 1-6 0z',collections:'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z',promos:'M4 12.5V5h7.5l8.5 8.5-7.5 7.5zM8.5 9.4v.2',shop:'M4 9l1-5h14l1 5M5 9v11h14V9M10 20v-6h4v6',insights:'M5 20v-9M12 20V4M19 20v-6'};
 const pn=(title,inner,hint)=>`<div class="pn"><h2>${title}</h2>${hint?`<p class="hint">${hint}</p>`:''}${inner}</div>`;
 const pill=(t,c)=>`<span class="pill${c?' '+c:''}">${t}</span>`;
 const stPill=o=>pill(esc(o.status),o.status==='New'?'on':o.status==='Ready'?'ok':!OPEN(o.status)?'off':'')+(o.due&&o.due<today()&&OPEN(o.status)?pill('Overdue','warn'):'');
@@ -490,11 +519,12 @@ collections(){ const n=DATA.collections.length;
     ${tbl('t-coll',[[''],['Collection'],['Designs'],['Home section'],['Status'],['Order']],DATA.collections.map(row).join(''),'No collections yet.')}
     <p class="hint">Collections group designs on the website. Empty ones stay hidden from customers until they have a design or a cover.</p>`};
 },
-offers(){ const n=DATA.offers.length;
-  const row=(o,i)=>`<div class="trow" data-a="edit" data-v="offer:${i}"><span class="tmain"><button class="tname">${esc(o.title||'Untitled offer')}</button><span class="tmeta dk">${esc(o.desc)}</span><span class="tmeta mb">${esc(o.discount||'No discount set')}${o.validUntil?' · until '+fmtDate(o.validUntil):''}${o.active===false?' · Off':''}</span></span><span class="dk">${esc(o.discount)||'<span class="tmeta">Not set</span>'}</span><span class="dk">${o.validUntil?fmtDate(o.validUntil):'<span class="tmeta">No end date</span>'}</span><span class="dk tstat">${o.active===false?pill('Off','off'):pill('Live','ok')}</span>${mv('offers',i,n)}</div>`;
-  return {title:'Offers',acts:'<button class="btn sm" data-a="new-offer">Add offer</button>',body:`
-    ${tbl('t-off',[['Offer'],['Discount'],['Valid until'],['Status'],['Order']],DATA.offers.map(row).join(''),'No offers yet.')}
-    <p class="hint">Offers show on the home page, the Offers page and the custom order form.</p>`};
+promos(){ const n=DATA.promos.length;
+  const row=(p,i)=>{ const st=p.active===false?pill('Off','off'):promoEnded(p)?pill('Ended','warn'):!(promoCode(p.code)&&Number(p.value)>0)?pill('Not ready','warn'):pill('Live','ok'), d=Number(p.value)>0?promoTxt(p)+(Number(p.min)?' above '+inr(p.min):''):'';
+    return `<div class="trow" data-a="edit" data-v="promo:${i}"><span class="tmain"><button class="tname">${esc(promoCode(p.code)||'New code')}</button><span class="tmeta dk">${esc(p.note)}</span><span class="tmeta mb">${esc(d||'No discount set')}${p.until?' · until '+fmtDate(p.until):''}${p.active===false?' · Off':''}</span></span><span class="dk">${esc(d)||'<span class="tmeta">Not set</span>'}</span><span class="dk">${p.until?fmtDate(p.until):'<span class="tmeta">No end date</span>'}</span><span class="dk tstat">${st}</span>${mv('promos',i,n)}</div>`; };
+  return {title:'Promo codes',acts:'<button class="btn sm" data-a="new-promo">Add code</button>',body:`
+    ${tbl('t-off',[['Code'],['Discount'],['Valid until'],['Status'],['Order']],DATA.promos.map(row).join(''),'No promo codes yet.')}
+    <p class="hint">Customers type a code at checkout or on the custom order form. One code per order. The code and its saving are written on the order, and you apply the discount when you confirm the price.</p>`};
 },
 shop(){ bo=SITE; return {title:'Shop details',body:`
   ${pn('Contact',`<div class="fgrid">${fld('WhatsApp number','wa',{ph:'919876543210',hint:'Digits only, with country code. Turns on the Send on WhatsApp buttons.'})}${fld('WhatsApp number as shown','waShow',{ph:'+91 98765 43210'})}${fld('Instagram username','ig')}${fld('Opening hours','hours',{ph:'Mon to Sat, 10 am to 7 pm'})}${fld('Studio address','address',{area:1})}</div>`,'Shown on the Contact page and in the footer.')}
@@ -506,7 +536,7 @@ shop(){ bo=SITE; return {title:'Shop details',body:`
   ${pn('About page',`<div class="fgrid">${fld('Her story','story',{area:1,hint:'Leave an empty line between paragraphs.'})}${fld('Quote shown under the story','quote',{area:1})}${fld('Specialities','specialities',{area:1,t:'lines',hint:'One speciality per line.'})}${fld('My USP','usp',{area:1})}${fld('My vision','vision',{area:1})}<div class="field"><label>Portrait photo</label>${onePhoto('portrait')}<span class="hint">The large photo on the About and home pages.</span></div><div class="field"><label>Small round photo</label>${onePhoto('avatar')}<span class="hint">Her face, shown beside each design and on the custom order note. Uses the portrait if empty.</span></div></div>`,'Leave a box empty to hide that part of the About page.')}
   ${pn('Ordering',`<div class="fgrid">${fld('Usual stitching time (days)','leadDays',{t:'num',ph:'For example 10',hint:'Shown on every design, in the cart and at checkout. A design can have its own time in Designs.'})}${fld('UPI ID for payments','upi',{ph:'For example name@okhdfcbank',hint:'Turns on the payment step at checkout, with a QR code and a pay button.'})}${fld('Name shown to the payer','upiName',{ph:'Sreez The Dress Maker'})}${fld('Advance to collect (%)','advancePct',{t:'num',ph:'50',hint:'Share of the order total asked at checkout. Use 100 for full payment. Empty means 50.'})}${fld('Payment','payment',{area:1,ph:'Payment methods and advance'})}${fld('Order alert key','notifyKey',{ph:'Access key from web3forms.com',hint:'Emails you each time an order is placed on the website. Get a free access key at web3forms.com with the email that should receive the alerts, and paste it here.'})}${fld('WhatsApp alert number','waAlertTo',{ph:'919876543210',hint:'Digits only, with country code. The WhatsApp number that gets a message for each order.'})}${fld('WhatsApp alert key','waAlertKey',{ph:'Key from CallMeBot',hint:'From that WhatsApp number, message the CallMeBot bot to get a key (steps at callmebot.com), and paste it here.'})}</div>`,'What customers are told when they buy. Payment is asked only when every design in the cart has a price.')}
   ${pn('Help page',`<div class="fgrid">${fld('Size chart','sizeChart',{area:1,ph:'S: bust 34, waist 28, hip 36 ...'})}${fld('Delivery','delivery',{area:1,ph:'Stitching time, shipping areas and charges'})}${fld('Alterations and returns','alterations',{area:1})}</div>`)}
-  ${pn('Offers page',`<div class="fgrid">${fld('Offer terms','offerTerms',{area:1})}<div class="field full"><label>Banner photo</label>${onePhoto('offerBanner')}</div></div>`)}`}; },
+`}; },
 insights(){ return {title:'Insights',body:insightsHTML()}; }
 };
 const onePhoto=k=>`<div class="onephoto">${SITE[k]?`<img src="${esc(imgSrc(SITE[k]))}" alt=""><button class="mini danger" data-a="site-photo-rm" data-v="${k}">Remove</button>`:''}<label class="mini up">${SITE[k]?'Replace':'Upload photo'}<input type="file" accept="image/*" data-up="site:${k}" hidden></label></div>`;
@@ -532,9 +562,10 @@ function editPage(){
     </div><div class="ecol eside">
     ${pn('Home page',fld('Section on the home page','group',{opts:[['','None'],['bridal','The bridal edit'],['more','More to explore']]}))}
     ${vis()}</div></div>`}; }
-  if(k==='offer') return {title:'Edit offer',acts,body:`<div class="egrid"><div class="ecol">
-    ${pn('Offer',`<div class="fgrid">${fld('Title','title')}${fld('Label','tag',{ph:'Festive'})}${fld('Description','desc',{area:1})}${fld('Discount','discount',{ph:'10% off, or ₹500 off'})}${fld('Valid until','validUntil',{type:'date'})}</div>`)}
-    </div><div class="ecol eside">${pn('Visibility',`<div class="checks col"><label class="check"><input type="checkbox" data-k="active" data-t="bool"${o.active!==false?' checked':''}>Show on the website</label></div>`)}</div></div>`};
+  if(k==='promo') return {title:'Edit promo code',acts,body:`<div class="egrid"><div class="ecol">
+    ${pn('Code',`<div class="fgrid">${fld('Code','code',{ph:'SREE10',hint:'Letters and numbers only. Customers can type it in small or capital letters.'})}${fld('Shown to customers as','note',{ph:'On your first order'})}</div>`)}
+    ${pn('Discount',`<div class="fgrid">${fld('Type','type',{opts:[['pct','Percent off the order'],['flat','Rupees off the order']]})}${fld('How much off','value',{t:'num',hint:'A number only: 10 for 10%, or 500 for \u20B9500.'})}${fld('Minimum order (\u20B9)','min',{t:'num',hint:'Leave empty for no minimum.'})}${fld('Valid until','until',{type:'date',hint:'Leave empty for no end date.'})}</div>`,'The site cannot check things like first order only or one use per customer. You check those when you confirm the order.')}
+    </div><div class="ecol eside">${pn('Visibility',`<div class="checks col"><label class="check"><input type="checkbox" data-k="active" data-t="bool"${o.active!==false?' checked':''}>Code is working</label>${chk('Show on the home page','show')}</div>`,'Untick Show on the home page for codes you share privately.')}</div></div>`};
   /* order */
   return {title:'Order #'+o.no,acts:`${o.id?'<button class="mini danger" data-a="del">Delete</button>':''}<button class="btn sm" data-a="save-order">${busy==='ord'?'Saving…':'Save order'}</button>`,body:`<div class="egrid"><div class="ecol">
     ${pn('Customer',`<div class="fgrid">${fld('Customer name','customer')}${fld('Phone','phone',{ph:'919876543210',hint:'With country code, for WhatsApp updates.'})}${fld('Came from','channel',{opts:['WhatsApp','Instagram','Walk-in','Phone','Other']})}</div>`)}
@@ -603,11 +634,11 @@ async function adminAct(a,v,el){
     try{ const col=cap.db.collection('orders'); await (o.id?col.doc(o.id):col.doc()).set(d); aEdit=null; toast('Order #'+o.no+' saved.'); }catch(e){ toast('The order could not be saved. Try again.'); } busy=''; }
   else if(a==='edit'){ const i=v.indexOf(':'), k=v.slice(0,i), id=v.slice(i+1);
     if(k==='product') aEdit={kind:k,obj:DATA.products.find(p=>p.id===id)}; else if(k==='coll') aEdit={kind:k,obj:DATA.collections.find(c=>c.id===id)};
-    else if(k==='offer') aEdit={kind:k,obj:DATA.offers[+id]}; else { const o=ORD.find(o=>o.id===id); aEdit={kind:k,obj:JSON.parse(JSON.stringify(o))}; }
+    else if(k==='promo') aEdit={kind:k,obj:DATA.promos[+id]}; else { const o=ORD.find(o=>o.id===id); aEdit={kind:k,obj:JSON.parse(JSON.stringify(o))}; }
     if(!aEdit.obj) aEdit=null; }
   else if(a==='new-product'){ const p={id:'p'+Date.now().toString(36),name:'New design',c:[],imgs:[],tag:'',sizes:'std',desc:'',price:null,offerPrice:null,fabric:'',hidden:true,trend:false}; DATA.products.unshift(p); aEdit={kind:'product',obj:p}; markDirty(); toast('New designs start hidden. Untick Hide when it is ready.'); }
   else if(a==='new-coll'){ let id=slug('new-collection'), n=1; while(DATA.collections.some(c=>c.id===id)) id='new-collection-'+(++n); const c={id,name:'New collection',cover:null,blurb:'',group:'',hidden:false}; DATA.collections.push(c); aEdit={kind:'coll',obj:c}; markDirty(); }
-  else if(a==='new-offer'){ const o={tag:'',title:'New offer',desc:'',discount:'',validUntil:'',active:false}; DATA.offers.push(o); aEdit={kind:'offer',obj:o}; markDirty(); }
+  else if(a==='new-promo'){ const o={code:'',type:'pct',value:10,min:null,until:'',note:'',active:true,show:false}; DATA.promos.push(o); aEdit={kind:'promo',obj:o}; markDirty(); }
   else if(a==='move'){ const [k,i,d]=v.split(':'), arr=DATA[k], j=+i+ +d; if(j<0||j>=arr.length) return; const x=arr.splice(+i,1)[0]; arr.splice(j,0,x); markDirty(); }
   else if(a==='ph'){ const [i,d]=v.split(':').map(Number), im=aEdit.obj.imgs; if(d===0) im.splice(i,1); else { const x=im.splice(i,1)[0]; im.splice(i+d,0,x); } markDirty(); }
   else if(a==='cover'){ aEdit.obj.cover=v||null; markDirty(); }
@@ -617,7 +648,7 @@ async function adminAct(a,v,el){
     if(k==='order'){ try{ await cap.db.collection('orders').doc(o.id).delete(); toast('Order deleted.'); }catch(e){ return toast('The order could not be deleted.'); } }
     else { if(k==='product') DATA.products.splice(DATA.products.indexOf(o),1);
       else if(k==='coll'){ DATA.collections.splice(DATA.collections.indexOf(o),1); DATA.products.forEach(p=>p.c=p.c.filter(c=>c!==o.id)); }
-      else DATA.offers.splice(DATA.offers.indexOf(o),1); markDirty(); }
+      else DATA.promos.splice(DATA.promos.indexOf(o),1); markDirty(); }
     aEdit=null; }
   else if(a==='publish') return publishSite();
   else if(a==='discard'){ try{ sessionStorage.removeItem('sreezDraft'); }catch(e){} location.reload(); return; }
@@ -629,6 +660,7 @@ document.addEventListener('input',e=>{ const el=e.target;
   if('tip' in el.dataset){ SITE.tips[+el.dataset.tip]=el.value.trim(); markDirty(); return; }
   if(el.dataset.k&&bo){ const t=el.dataset.t; bo[el.dataset.k]=t==='bool'?el.checked:t==='lines'?el.value.split('\n').map(x=>x.trim()).filter(Boolean):t==='num'?(el.value.trim()===''?null:(Number(el.value.replace(/[^\d.]/g,''))||0)):el.value;
     if(el.dataset.k==='wa') bo.wa=el.value.replace(/\D/g,'');
+    if(el.dataset.k==='code'&&aEdit&&aEdit.kind==='promo') bo.code=promoCode(el.value);
     if(aEdit&&aEdit.kind==='order') oSum(); else { markDirty(); const pv=$('pPrev'); if(pv&&aEdit) pv.innerHTML=priceHTML(aEdit.obj); } }
   else if(el.dataset.oi){ const [i,k]=el.dataset.oi.split(':'), it=aEdit.obj.items[+i]; it[k]=k==='price'?(Number(el.value.replace(/[^\d.]/g,''))||0):el.value;
     if(k==='name'){ const p=DATA.products.find(p=>p.name===el.value); if(p&&!it.price){ it.price=p.offerPrice||p.price||0; const pe=el.parentNode.querySelector('[data-oi$=":price"]'); if(pe) pe.value=it.price||''; } } oSum(); }
@@ -643,7 +675,7 @@ document.addEventListener('change',async e=>{ const el=e.target;
 
 document.addEventListener('click',e=>{
   const ad=e.target.closest('[data-a]'); if(ad&&isAdmin){ adminAct(ad.dataset.a,ad.dataset.v,ad); return; }
-  const t=e.target.closest('[data-cnav],#searchBtn,#showMore,[data-tab],[data-s],[data-rm],[data-img],[data-zoom],[data-custom],[data-offer],#lbClose,#lbPrev,#lbNext,#lbImg,[data-copy],[data-close],#menuBtn,#bagBtn,#bagTab,#pAdd,#pBuy,#ckDone,#scrim');
+  const t=e.target.closest('[data-cnav],#searchBtn,#showMore,[data-tab],[data-s],[data-rm],[data-img],[data-zoom],[data-custom],[data-promo],#lbClose,#lbPrev,#lbNext,#lbImg,[data-copy],[data-close],#menuBtn,#bagBtn,#bagTab,#pAdd,#pBuy,#ckDone,#scrim');
   if(!t) return;
   if(t.dataset.cnav){ const g=t.parentNode.querySelector('.cgal'), n=g.children.length, i=(Math.round(g.scrollLeft/g.clientWidth)+ +t.dataset.cnav+n)%n; g.scrollTo({left:i*g.clientWidth,behavior:'smooth'}); }
   else if(t.id==='searchBtn') toggleSearch($('searchBar').hidden);
@@ -654,7 +686,7 @@ document.addEventListener('click',e=>{
   else if(t.dataset.img){ const g=$('gal'); g.scrollTo({left:+t.dataset.img*g.clientWidth,behavior:'smooth'}); }
   else if(t.dataset.zoom){ const all=[...t.closest('[data-zset]').querySelectorAll('[data-zoom]')]; openLB(all.map(x=>x.dataset.zoom),all.indexOf(t)); }
   else if(t.dataset.custom){ const p=prod(t.dataset.custom), c=pcoll(p); draft={design:p.name,type:c?c.name:''}; location.hash='custom-order'; }
-  else if(t.dataset.offer){ draft={offer:t.dataset.offer}; location.hash='custom-order'; }
+  else if(t.dataset.promo){ setPromo(t.dataset.promo); toast(promo+' is saved. It is added when you order.'); }
   else if(t.id==='lbClose') closeLB();
   else if(t.id==='lbPrev') stepLB(-1);
   else if(t.id==='lbNext') stepLB(1);
@@ -673,12 +705,12 @@ const alertOwner=(name,items,extra)=>{ const body=['Customer: '+name].concat(ite
   SB.notifyWa(SITE.waAlertTo||SITE.wa,(SITE.waAlertKey||'').trim(),['*New order on the website*'].concat(body).join('\n')); };
 /* advance asked at checkout: a share of the total, only when the shop has a UPI ID and every item has a price */
 const advPct=()=>{ const n=Number(SITE.advancePct); return n>0?Math.min(100,Math.round(n)):50; };
-const advDue=()=>{ const x=bagTotal(); return SITE.upi&&x.t&&!x.open?Math.ceil(x.t*advPct()/100):0; };
+const advDue=()=>{ const x=bagTotal(); return SITE.upi&&x.t&&!x.open?Math.ceil(bagNet()*advPct()/100):0; };
 const upiLink=amt=>'upi://pay?pa='+encodeURIComponent(SITE.upi.trim())+'&pn='+encodeURIComponent(SITE.upiName||'Sreez The Dress Maker')+'&am='+amt+'.00&cu=INR&tn='+encodeURIComponent('Sreez order advance');
 let ckv=null, qrLib=null;
 const loadQr=()=>qrLib||(qrLib=new Promise((res,rej)=>{ const e=document.createElement('script'); e.src='qr.js'; e.onload=res; e.onerror=()=>{ qrLib=null; rej(); }; document.head.appendChild(e); }));
 function payStep(){
-  const amt=advDue(), tot=bagTotal().t, full=advPct()>=100;
+  const amt=advDue(), tot=bagNet(), full=advPct()>=100;
   $('view').innerHTML=`<div class="sent"><div><span class="eyebrow">Payment</span><h1 style="margin-top:4px">${full?'Pay for your order':'Pay the advance'}</h1><p class="lede">${full?`Pay ${inr(amt)} by UPI to confirm your order.`:`Pay ${inr(amt)} now by UPI, which is ${advPct()}% of ${inr(tot)}, to confirm your order. The balance is paid at delivery.`}</p></div>
     <div class="box paybox"><div class="payqr" id="payQr" role="img" aria-label="UPI payment code"></div>
       <div class="payinfo"><div class="payamt">${inr(amt)}</div><div class="payto">to ${esc(SITE.upiName||'Sreez The Dress Maker')}</div><div class="payid"><code id="payId">${esc(SITE.upi.trim())}</code><button class="mini" id="payCopy" type="button">Copy</button></div>
@@ -694,7 +726,9 @@ document.addEventListener('click',e=>{ const t=e.target.closest('#payDone,#payLa
   if(t.disabled) return; t.disabled=true; t.textContent='Placing your order…';
   placeOrder(t.id==='payDone'?{paid:true,ref:$('payRef').value.replace(/[^\w-]/g,'').slice(0,24)}:{paid:false}); });
 async function placeOrder(pay){
-  if($('ckForm')){ ckv={}; ['ckName','ckPhone','ckDel','ckAddr','ckDate','ckNotes'].forEach(k=>ckv[k]=$(k)?$(k).value.trim():''); }
+  if($('ckForm')){ if($('promoIn')&&promoCode($('promoIn').value)&&!promoApply($('promoIn').value)){ $('promoIn').focus(); return toast('That promo code did not work. Fix it or clear the box.'); }
+    if($('promoIn')&&!promoCode($('promoIn').value)&&promo){ setPromo(''); promoDraw(); }
+    ckv={}; ['ckName','ckPhone','ckDel','ckAddr','ckDate','ckNotes'].forEach(k=>ckv[k]=$(k)?$(k).value.trim():''); }
   if(!ckv||!bag.length){ location.hash='checkout'; return; }
   const val=id=>ckv[id]||'', L=bagLead(), del=val('ckDel');
   if(del.startsWith('Deliver')&&!val('ckAddr')){ $('ckAddr').focus(); return toast('Add your delivery address, or choose Collect from the studio.'); }
@@ -706,17 +740,19 @@ async function placeOrder(pay){
   if(val('ckAddr')) lines.push(`Address: ${val('ckAddr').replace(/\s*\n\s*/g,', ')}`);
   if(val('ckDate')) lines.push(`Needed by: ${val('ckDate')}`);
   if(val('ckNotes')) lines.push(`Notes: ${val('ckNotes').replace(/\s*\n\s*/g,' ')}`);
-  lines.push(`Estimated total: ${totTxt()}`);
+  const pLine=promoLine();
+  if(pLine) lines.push(pLine);
+  lines.push(`Estimated total: ${netTxt()}`);
   if(payLine) lines.push(payLine);
   const msg=lines.join('\n');
   const steps=`<ol class="steps"><li><b>Sreez confirms</b><span>She checks the design, your size and the date, and shares the final price.</span></li><li><b>${due&&pay.paid?'Advance checked':'Pay the advance'}</b><span>${due&&pay.paid?'She checks your UPI payment of '+inr(due)+'.':SITE.payment?nl(SITE.payment):'She tells you how much to pay in advance and how.'}</span></li><li><b>Stitching${L?', about '+dayTxt(L):''}</b><span>Your piece is cut and stitched to your measurements.</span></li><li><b>Fitting and delivery</b><span>Final adjustments, then pickup or delivery.</span></li></ol>`;
   let placed=false;
   if(SB.on){ const go=document.querySelector('#ckForm [type=submit]'); if(go){ if(go.disabled) return; go.disabled=true; go.textContent='Placing your order…'; }
-    const note=[`Delivery: ${del}`]; if(val('ckAddr')) note.push('Address: '+val('ckAddr').replace(/\s*\n\s*/g,', ')); if(val('ckNotes')) note.push('Notes: '+val('ckNotes')); if(payLine) note.push(payLine);
+    const note=[`Delivery: ${del}`]; if(val('ckAddr')) note.push('Address: '+val('ckAddr').replace(/\s*\n\s*/g,', ')); if(val('ckNotes')) note.push('Notes: '+val('ckNotes')); if(pLine) note.push(pLine+(bagPromo().off?'. Total after the code: '+netTxt()+'.':'')); if(payLine) note.push(payLine);
     try{ await SB.createOrder({createdAt:new Date().toISOString(),customer:val('ckName').slice(0,80),phone:val('ckPhone').replace(/[^\d+]/g,'').slice(0,20),channel:'Website',status:'New',
         items:bag.slice(0,30).map(b=>({pid:b.id,name:prod(b.id).name,size:b.size,price:effPrice(prod(b.id))})),due:/^\d{4}-\d{2}-\d{2}$/.test(val('ckDate'))?val('ckDate'):'',discount:0,advance:0,measurements:'',notes:note.join('\n').slice(0,1500)});
-      placed=true; alertOwner(val('ckName'),bag.map(b=>prod(b.id).name+' ('+b.size+')'),totTxt()+(payLine?'\n'+payLine:'')); }catch(e){} }
-  if(placed){ bag=[]; saveBag(); renderBag();
+      placed=true; alertOwner(val('ckName'),bag.map(b=>prod(b.id).name+' ('+b.size+')'),netTxt()+(pLine?'\n'+pLine:'')+(payLine?'\n'+payLine:'')); }catch(e){} }
+  if(placed){ bag=[]; saveBag(); renderBag(); setPromo('');
     $('view').innerHTML=`<div class="sent"><div><span class="eyebrow">Thank you</span><h1 style="margin-top:4px">Your order has reached Sreez</h1><p class="lede">Sreez will contact you on ${esc(val('ckPhone'))} to confirm the price${L?'. Stitching takes about '+dayTxt(L)+' after your measurements are confirmed':' and the stitching time'}.</p></div>
     <div class="box"><div class="label">Your order</div><textarea id="ckMsg" readonly style="min-height:190px">${esc(msg)}</textarea><p class="hint" style="margin:10px 0 0">Want a quicker reply? You can also send this to Sreez yourself.</p>${sendHTML('ckMsg',msg)}</div>
     ${steps}
@@ -735,10 +771,12 @@ document.addEventListener('submit',async e=>{
   if(visit&&!val('coVDate')){ $('coVDate').focus(); return toast('Choose the date you would like to visit the studio.'); }
   const vD=visit?new Date(val('coVDate')+'T00:00'):null, vDay=visit?['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][vD.getDay()]+', '+vD.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][vD.getMonth()]+' '+vD.getFullYear():'', vTxt=visit?`${vDay}, ${val('coVTime')}`:'';
   const m=visit?'':MEAS.map((m,k)=>[m,val('coM'+k)]).filter(x=>x[1]).map(x=>`${x[0]} ${x[1]} in`).join(', ');
+  const coCode=promoCode(val('coPromo')), coPromo=coCode?promoCheck(coCode,0,true):null;
+  if(coPromo&&coPromo.err){ $('coPromo').focus(); return toast(coPromo.err); }
   const lines=[`Hi Sreez, this is ${val('coName')}. I would like a custom order.`,`Garment: ${val('coType')}`], extra=[`Garment: ${val('coType')}`];
   const add=(l,keep)=>{ lines.push(l); if(keep) extra.push(l); };
   if(val('coDesign')) add(`Starting design: ${val('coDesign')}`);
-  if(val('coOffer')) add(`Offer: ${val('coOffer')}`,1);
+  if(coPromo) add(`Promo code: ${coPromo.code} (${promoTxt(coPromo.p)}${coPromo.min?', on orders of '+inr(coPromo.min)+' or more':''})`,1);
   if(val('coOcc')) add(`Occasion: ${val('coOcc')}`,1);
   if(val('coDate')) add(`Needed by: ${val('coDate')}`);
   if(visit) add(`Studio visit for measurements: ${vTxt}`,1); else add(`Size: ${val('coSize')}`);
@@ -793,7 +831,7 @@ async function ownerCheck(){ if(ownerAsked) return; ownerAsked=true;
   try{ if(ok) localStorage.setItem('sreezOwner','1'); else if(own.state!=='off') localStorage.removeItem('sreezOwner'); }catch(e){}
   if(!ok){ isAdmin=false; chrome(); if(onManage()) route(); return; }
   isAdmin=true; cap.store=own.store; cap.assets=own.assets; cap.db=own.db;
-  try{ const d=sessionStorage.getItem('sreezDraft'); if(d){ const x=JSON.parse(d); if(x&&x.products&&JSON.stringify(x)!==JSON.stringify(DATA)){ ['site','collections','products','offers'].forEach(k=>{ if(k==='site') Object.assign(SITE,x.site); else DATA[k]=x[k]; }); dirty=true; $('pubBar').hidden=false; } } }catch(e){}
+  try{ const d=sessionStorage.getItem('sreezDraft'); if(d){ const x=JSON.parse(d); if(x&&x.products&&JSON.stringify(x)!==JSON.stringify(DATA)){ normCat(x); ['site','collections','products','promos'].forEach(k=>{ if(k==='site') Object.assign(SITE,x.site); else DATA[k]=x[k]; }); dirty=true; $('pubBar').hidden=false; } } }catch(e){}
   watchOrders(); chrome(); route();
 }
 const authMsg=err=>{ const c=(err&&err.code)||''; return c.includes('wrong-password')||c.includes('invalid-credential')||c.includes('invalid-login')||c.includes('user-not-found')?'That email or password is not right.':c.includes('email-already-in-use')?'This email already has an account. Tap Forgot password to set a new password.':c.includes('weak-password')?'Choose a password with at least 6 characters.':c.includes('invalid-email')?'Check the email address.':c.includes('too-many-requests')?'Too many tries. Wait a few minutes and try again.':c.includes('popup')?'The Google window was closed or blocked. Try again, or use email and password.':c.includes('network')?'No connection. Check your internet and try again.':'That did not work. Try again.'; };
@@ -820,8 +858,8 @@ document.addEventListener('click',e=>{ const t=e.target.closest('#ownIn,#ownOut,
   ownAct({ownIn:'google',ownOut:'out',ownNew:'new',ownReset:'reset',ownGo:'go',ownAgain:'again'}[t.id]); });
 /* fetch the owner's latest published catalogue; the page was drawn from the saved copy, so redraw only if something changed */
 SB.watchImages();
-SB.loadCatalogue().then(x=>{ if(!x||!x.products||!x.site) return; const j=JSON.stringify(x); try{ localStorage.setItem('sreezCat',j); }catch(e){}
+SB.loadCatalogue().then(x=>{ if(!x||!x.products||!x.site) return; normCat(x); const j=JSON.stringify(x); try{ localStorage.setItem('sreezCat',j); }catch(e){}
   if(dirty||j===JSON.stringify(DATA)) return;
-  Object.keys(SITE).forEach(k=>delete SITE[k]); Object.assign(SITE,x.site); ['collections','products','offers'].forEach(k=>DATA[k]=x[k]); if(x.v) DATA.v=x.v;
+  Object.keys(SITE).forEach(k=>delete SITE[k]); Object.assign(SITE,x.site); ['collections','products','promos'].forEach(k=>DATA[k]=x[k]); if(x.v) DATA.v=x.v;
   chrome(); renderBag(); if(!onManage()&&location.hash!=='#checkout') route(); }).catch(()=>{});
 if(onManage()||wasOwner()) ownerCheck();
